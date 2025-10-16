@@ -5,10 +5,9 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { DatabaseProvider } from './contexts/DatabaseContext';
 import Header from './components/Header';
-import Hero from './components/Hero';
-import Stats from './components/Stats';
-import Features from './components/Features';
-import Services from './components/Services';
+import DesktopLanding from './components/DesktopLanding';
+import MobileLanding from './components/MobileLanding';
+import MobileMarket from './components/MobileMarket';
 import Footer from './components/Footer';
 import Account from './components/Account';
 import Market from './components/Market';
@@ -20,8 +19,10 @@ import SmartTrading from './components/SmartTrading';
 import SignMessageModal from './components/SignMessageModal';
 import AdminPanel from './components/AdminPanel';
 import AlertSystem from './components/AlertSystem';
+import useIsMobile from './hooks/useIsMobile';
 
 function App() {
+  const isMobile = useIsMobile();
   return (
     <LanguageProvider>
       <WalletProvider>
@@ -29,21 +30,14 @@ function App() {
           <Router>
           <div className="App">
           <Routes>
-            <Route path="/" element={
-              <>
-                <Header />
-                <Hero />
-                <Stats />
-                <Features />
-                <Services />
-                <Footer />
-              </>
-            } />
+            <Route path="/" element={isMobile ? <MobileLanding /> : <DesktopLanding />} />
             <Route path="/market" element={
-              <>
-                <Header />
-                <Market />
-              </>
+              isMobile ? <MobileMarket /> : (
+                <>
+                  <Header />
+                  <Market />
+                </>
+              )
             } />
             <Route path="/smart-trading" element={
               <>

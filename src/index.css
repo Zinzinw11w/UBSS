@@ -41,6 +41,22 @@
     .section-padding {
       @apply py-12 px-4;
     }
+    
+    /* Mobile-specific improvements */
+    body {
+      font-size: 16px;
+      -webkit-text-size-adjust: 100%;
+    }
+    
+    /* Ensure touch targets are large enough */
+    button, a, input, select, textarea {
+      min-height: 44px;
+    }
+    
+    /* Prevent horizontal scroll */
+    * {
+      max-width: 100%;
+    }
   }
   
   @media (min-width: 641px) and (max-width: 768px) {
