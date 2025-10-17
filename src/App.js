@@ -8,6 +8,10 @@ import Header from './components/Header';
 import DesktopLanding from './components/DesktopLanding';
 import MobileLanding from './components/MobileLanding';
 import MobileMarket from './components/MobileMarket';
+import MobileSmartTrading from './components/MobileSmartTrading';
+import MobileLoan from './components/MobileLoan';
+import MobileAccount from './components/MobileAccount';
+import MobileTradingDetail from './components/MobileTradingDetail';
 import Footer from './components/Footer';
 import Account from './components/Account';
 import Market from './components/Market';
@@ -40,17 +44,21 @@ function App() {
               )
             } />
             <Route path="/smart-trading" element={
-              <>
-                <Header />
-                <SmartTrading />
-              </>
+              isMobile ? <MobileSmartTrading /> : (
+                <>
+                  <Header />
+                  <SmartTrading />
+                </>
+              )
             } />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/account" element={
-              <>
-                <Header />
-                <Account />
-              </>
+              isMobile ? <MobileAccount /> : (
+                <>
+                  <Header />
+                  <Account />
+                </>
+              )
             } />
             <Route path="/invite-friends" element={
               <>
@@ -65,17 +73,21 @@ function App() {
               </>
             } />
             <Route path="/loan" element={
-              <>
-                <Header />
-                <Loan />
-              </>
+              isMobile ? <MobileLoan /> : (
+                <>
+                  <Header />
+                  <Loan />
+                </>
+              )
             } />
-            <Route path="/trading/:category/*" element={
-              <>
-                <Header />
-                <TradingDetail />
-              </>
-            } />
+                <Route path="/trading/:category/*" element={
+                  isMobile ? <MobileTradingDetail /> : (
+                    <>
+                      <Header />
+                      <TradingDetail />
+                    </>
+                  )
+                } />
                         </Routes>
                         <SignMessageModal />
                         <AlertSystem />

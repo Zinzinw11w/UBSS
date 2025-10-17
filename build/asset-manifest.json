@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/UBSS/static/css/main.d618e379.css",
-    "main.js": "/UBSS/static/js/main.1b35c61d.js",
+    "main.css": "/UBSS/static/css/main.a8374795.css",
+    "main.js": "/UBSS/static/js/main.b3304abe.js",
     "index.html": "/UBSS/index.html",
-    "main.d618e379.css.map": "/UBSS/static/css/main.d618e379.css.map",
-    "main.1b35c61d.js.map": "/UBSS/static/js/main.1b35c61d.js.map"
+    "main.a8374795.css.map": "/UBSS/static/css/main.a8374795.css.map",
+    "main.b3304abe.js.map": "/UBSS/static/js/main.b3304abe.js.map"
   },
   "entrypoints": [
-    "static/css/main.d618e379.css",
-    "static/js/main.1b35c61d.js"
+    "static/css/main.a8374795.css",
+    "static/js/main.b3304abe.js"
   ]
 }
