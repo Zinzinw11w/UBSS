@@ -582,7 +582,7 @@ export const createCryptoWebSocket = (symbols, onMessage) => {
     'dogecoin': 'DOGEUSDT',
     'ripple': 'XRPUSDT',
     'tron': 'TRXUSDT',
-    'polygon': 'MATICUSDT',
+    'polygon': 'POLUSDT',  // Try POLUSDT - Binance may have changed the symbol
     'cardano': 'ADAUSDT',
     'chainlink': 'LINKUSDT',
     'cosmos': 'ATOMUSDT',
@@ -595,12 +595,31 @@ export const createCryptoWebSocket = (symbols, onMessage) => {
       // Create WebSocket streams for all symbols
       const streams = symbols.map(symbol => {
         const binanceSymbol = symbolMap[symbol.toLowerCase()] || `${symbol.toUpperCase()}USDT`;
-        return `${binanceSymbol.toLowerCase()}@ticker`;
+        const stream = `${binanceSymbol.toLowerCase()}@ticker`;
+        
+        // Debug: Special handling for polygon/MATIC
+        if (symbol.toLowerCase() === 'polygon') {
+          console.log('🔍 Processing polygon symbol:', {
+            symbol,
+            binanceSymbol,
+            stream
+          });
+        }
+        
+        return stream;
       }).join('/');
       
       const wsUrl = `wss://stream.binance.com:9443/ws/${streams}`;
       console.log('🔗 Connecting to Binance WebSocket:', wsUrl);
       console.log('📋 Streams being subscribed to:', streams);
+      
+      // Debug: Check if POLUSDT is in the streams
+      if (streams.includes('polusdt@ticker')) {
+        console.log('✅ POLUSDT stream is included in subscription');
+      } else {
+        console.log('❌ POLUSDT stream is NOT included in subscription');
+        console.log('Available streams:', streams.split('/'));
+      }
       
       ws = new WebSocket(wsUrl);
   
@@ -625,6 +644,16 @@ export const createCryptoWebSocket = (symbols, onMessage) => {
               const priceChangePercent = parseFloat(streamData.P); // 24h change percentage
               
               console.log(`💰 ${symbol}: $${price} (${priceChangePercent}%)`);
+              
+              // Debug: Special handling for POLUSDT
+              if (symbol === 'POLUSDT') {
+                console.log('🎯 POLUSDT data received:', {
+                  symbol,
+                  price,
+                  priceChangePercent,
+                  streamData
+                });
+              }
               
               // Find the original symbol from the Binance symbol
               const originalSymbol = Object.keys(symbolMap).find(key => 
