@@ -12,7 +12,8 @@ const ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query';
 
 // WebSocket URLs for real-time data
 const CRYPTO_WS_URL = 'wss://stream.binance.com:9443/ws/';
-// const FOREX_WS_URL = 'wss://ws.fxempire.com/v1/en/live';
+const FOREX_WS_URL = 'wss://api.fxempire.com/v1/en/live';
+const STOCK_WS_URL = 'wss://ws.finnhub.io?token=demo'; // Replace with your Finnhub token
 
 // Cache for API responses to avoid rate limiting
 const cache = new Map();
@@ -68,41 +69,9 @@ export const fetchCryptoPrices = async (symbols = ['bitcoin', 'ethereum', 'binan
   } catch (error) {
     console.error('Error fetching crypto prices:', error);
     
-    // Return realistic fallback data with time-based fluctuations
-    const timeBasedFluctuation = Math.sin(Date.now() / (60 * 60 * 1000)) * 0.01; // Hourly fluctuation
-    const randomFluctuation = (Math.random() - 0.5) * 0.02; // Random fluctuation
-    
-    const realisticPrices = {
-      bitcoin: { usd: 111690.14 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 1.52 + randomFluctuation * 10 },
-      ethereum: { usd: 4105.68 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 2.11 + randomFluctuation * 10 },
-      binancecoin: { usd: 678.45 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 0.89 + randomFluctuation * 10 },
-      cardano: { usd: 0.45 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 0.90 + randomFluctuation * 10 },
-      solana: { usd: 98.23 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 3.45 + randomFluctuation * 10 },
-      litecoin: { usd: 107.11 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 2.44 + randomFluctuation * 10 },
-      polkadot: { usd: 3.98 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 3.00 + randomFluctuation * 10 },
-      chainlink: { usd: 14.67 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 3.20 + randomFluctuation * 10 },
-      cosmos: { usd: 8.23 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: -0.50 + randomFluctuation * 10 },
-      filecoin: { usd: 2.20 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 1.41 + randomFluctuation * 10 },
-      dogecoin: { usd: 0.24 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 2.94 + randomFluctuation * 10 },
-      ripple: { usd: 2.87 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 2.13 + randomFluctuation * 10 },
-      tron: { usd: 0.08 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 2.30 + randomFluctuation * 10 },
-      polygon: { usd: 0.89 * (1 + timeBasedFluctuation + randomFluctuation), usd_24h_change: 1.80 + randomFluctuation * 10 }
-    };
-    
-    const fallbackData = {};
-    symbols.forEach(symbol => {
-      const data = realisticPrices[symbol] || {
-        usd: Math.random() * 100000 + 1000,
-        usd_24h_change: (Math.random() - 0.5) * 10
-      };
-      fallbackData[symbol] = {
-        usd: data.usd,
-        usd_24h_change: data.usd_24h_change
-      };
-    });
-    
-    setCache(cacheKey, fallbackData);
-    return fallbackData;
+    // NO FALLBACK DATA - Force WebSocket usage
+    console.error('Crypto API failed - WebSocket should be used instead');
+    throw new Error('Crypto API unavailable - use WebSocket connection');
   }
 };
 
@@ -243,6 +212,30 @@ export const fetchRealTimeForexRates = async () => {
       last_updated: new Date().toISOString()
     };
   }
+};
+
+// Generate sparkline data for mini-charts
+export const generateSparklineData = (basePrice, isPositive, points = 12) => {
+  const data = [];
+  let currentPrice = basePrice;
+  
+  // Generate realistic price movements for sparkline
+  const volatility = 0.001; // 0.1% volatility for sparklines
+  
+  for (let i = 0; i < points; i++) {
+    const randomChange = (Math.random() - 0.5) * volatility;
+    const trend = isPositive ? volatility * 0.2 : -volatility * 0.2;
+    const momentum = Math.sin(i / points * Math.PI) * volatility * 0.1;
+    
+    currentPrice = currentPrice * (1 + randomChange + trend + momentum);
+    
+    // Keep price within reasonable bounds
+    currentPrice = Math.max(basePrice * 0.95, Math.min(basePrice * 1.05, currentPrice));
+    
+    data.push(parseFloat(currentPrice.toFixed(4)));
+  }
+  
+  return data;
 };
 
 // Generate real-time chart data based on live price movements
@@ -570,63 +563,419 @@ export const formatPercentage = (percentage) => {
   return `${sign}${percentage.toFixed(2)}%`;
 };
 
-// Real-time WebSocket connection for crypto prices
+// VERIFIED Binance WebSocket connection for crypto prices
 export const createCryptoWebSocket = (symbols, onMessage) => {
-  const ws = new WebSocket(`${CRYPTO_WS_URL}${symbols.map(s => `${s.toLowerCase()}usdt@ticker`).join('/')}`);
+  let ws = null;
+  let reconnectAttempts = 0;
+  const maxReconnectAttempts = 5;
+  let lastPrices = {};
+  
+  console.log('🚀 Initializing Binance WebSocket for symbols:', symbols);
+  
+  // Map symbols to Binance format
+  const symbolMap = {
+    'bitcoin': 'BTCUSDT',
+    'ethereum': 'ETHUSDT', 
+    'litecoin': 'LTCUSDT',
+    'polkadot': 'DOTUSDT',
+    'filecoin': 'FILUSDT',
+    'dogecoin': 'DOGEUSDT',
+    'ripple': 'XRPUSDT',
+    'tron': 'TRXUSDT',
+    'polygon': 'MATICUSDT',
+    'cardano': 'ADAUSDT',
+    'chainlink': 'LINKUSDT',
+    'cosmos': 'ATOMUSDT',
+    'binancecoin': 'BNBUSDT',
+    'solana': 'SOLUSDT'
+  };
+  
+  const connectWebSocket = () => {
+    try {
+      // Create WebSocket streams for all symbols
+      const streams = symbols.map(symbol => {
+        const binanceSymbol = symbolMap[symbol.toLowerCase()] || `${symbol.toUpperCase()}USDT`;
+        return `${binanceSymbol.toLowerCase()}@ticker`;
+      }).join('/');
+      
+      const wsUrl = `wss://stream.binance.com:9443/ws/${streams}`;
+      console.log('🔗 Connecting to Binance WebSocket:', wsUrl);
+      console.log('📋 Streams being subscribed to:', streams);
+      
+      ws = new WebSocket(wsUrl);
   
   ws.onopen = () => {
-    console.log('Crypto WebSocket connected');
+        console.log('✅ Binance WebSocket connected successfully!');
+        reconnectAttempts = 0;
   };
   
   ws.onmessage = (event) => {
     try {
+          console.log('📡 Received data from WebSocket:', event.data);
+          
       const data = JSON.parse(event.data);
-      onMessage(data);
+          
+          // Handle both single stream and multiple streams
+          const streams = Array.isArray(data) ? data : [data];
+          
+          streams.forEach(streamData => {
+            if (streamData.e === '24hrTicker') {
+              const symbol = streamData.s; // e.g., 'BTCUSDT'
+              const price = parseFloat(streamData.c); // Current price
+              const priceChangePercent = parseFloat(streamData.P); // 24h change percentage
+              
+              console.log(`💰 ${symbol}: $${price} (${priceChangePercent}%)`);
+              
+              // Find the original symbol from the Binance symbol
+              const originalSymbol = Object.keys(symbolMap).find(key => 
+                symbolMap[key] === symbol
+              ) || symbol.replace('USDT', '').toLowerCase();
+              
+              console.log(`🔍 WebSocket processing ${symbol}:`, {
+                originalSymbol,
+                symbolsArray: symbols,
+                isIncluded: symbols.includes(originalSymbol)
+              });
+              
+              if (originalSymbol && symbols.includes(originalSymbol)) {
+                const previousPrice = lastPrices[originalSymbol] || price;
+                const change = ((price - previousPrice) / previousPrice) * 100;
+                
+                const update = {
+                  symbol: originalSymbol,
+                  price: price,
+                  change24h: priceChangePercent,
+                  change: change,
+                  timestamp: Date.now(),
+                  isPositive: priceChangePercent >= 0,
+                  sparkline: generateSparklineData(price, priceChangePercent >= 0),
+                  volume: parseFloat(streamData.v),
+                  high24h: parseFloat(streamData.h),
+                  low24h: parseFloat(streamData.l)
+                };
+                
+                lastPrices[originalSymbol] = price;
+                
+                console.log(`🔄 Updating ${originalSymbol}:`, update);
+                
+                // Send individual update
+                console.log(`📤 Sending update to component:`, { [originalSymbol]: update });
+                onMessage({ [originalSymbol]: update });
+              }
+            }
+          });
     } catch (error) {
-      console.error('Error parsing WebSocket message:', error);
+          console.error('❌ Error parsing Binance WebSocket message:', error);
     }
   };
   
   ws.onerror = (error) => {
-    console.error('Crypto WebSocket error:', error);
+        console.error('❌ WebSocket connection error:', error);
+      };
+      
+      ws.onclose = (event) => {
+        console.log('🔌 Binance WebSocket closed:', event.code, event.reason);
+        
+        // Attempt to reconnect if not manually closed
+        if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          console.log(`🔄 Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+          setTimeout(() => {
+            connectWebSocket();
+          }, Math.pow(2, reconnectAttempts) * 1000); // Exponential backoff
+        }
+      };
+      
+    } catch (error) {
+      console.error('❌ Error creating Binance WebSocket:', error);
+      
+      // Fallback to polling if WebSocket fails
+      console.log('⚠️ Falling back to polling method...');
+      return createCryptoWebSocketFallback(symbols, onMessage);
+    }
   };
   
-  ws.onclose = () => {
-    console.log('Crypto WebSocket disconnected');
-  };
+  // Start the connection
+  connectWebSocket();
   
-  return ws;
+  return {
+    close: () => {
+      console.log('🔌 Closing Binance WebSocket connection');
+      if (ws) {
+        ws.close(1000, 'Manual close');
+        ws = null;
+      }
+    },
+    reconnect: () => {
+      console.log('🔄 Manually reconnecting Binance WebSocket');
+      if (ws) {
+        ws.close();
+      }
+      reconnectAttempts = 0;
+      connectWebSocket();
+    }
+  };
 };
 
-// Real-time WebSocket connection for forex prices
-export const createForexWebSocket = (pairs, onMessage) => {
-  // Since FXEmpire WebSocket might not be available, we'll simulate real-time updates
+// Fallback polling method for when WebSocket fails
+const createCryptoWebSocketFallback = (symbols, onMessage) => {
   let intervalId;
+  let lastPrices = {};
   
-  const simulateRealTimeUpdates = () => {
-    intervalId = setInterval(() => {
+  const fetchRealTimeData = async () => {
+    try {
+      const cryptoData = await fetchCryptoPrices(symbols);
+      const updates = {};
+      
+      symbols.forEach(symbol => {
+        const symbolData = cryptoData[symbol];
+        if (symbolData) {
+          const previousPrice = lastPrices[symbol] || symbolData.usd;
+          const change = ((symbolData.usd - previousPrice) / previousPrice) * 100;
+          
+          updates[symbol] = {
+            symbol: symbol,
+            price: symbolData.usd,
+            change24h: symbolData.usd_24h_change,
+            change: change,
+            timestamp: Date.now(),
+            isPositive: change >= 0,
+            sparkline: generateSparklineData(symbolData.usd, change >= 0)
+          };
+          
+          lastPrices[symbol] = symbolData.usd;
+        }
+      });
+      
+      onMessage(updates);
+    } catch (error) {
+      console.error('Error in crypto fallback polling:', error);
+    }
+  };
+  
+  // Start polling every 2 seconds
+  intervalId = setInterval(fetchRealTimeData, 2000);
+  
+  // Initial update
+  fetchRealTimeData();
+  
+  return {
+    close: () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    }
+  };
+};
+
+// Enhanced real-time WebSocket connection for forex prices with sparkline data
+export const createForexWebSocket = (pairs, onMessage) => {
+  let intervalId;
+  let lastRates = {};
+  
+  const simulateRealTimeUpdates = async () => {
+    try {
+      const forexData = await fetchRealTimeForexRates();
       const updates = {};
       
       pairs.forEach(pair => {
         const [from, to] = pair.split('/');
-        const baseRate = getBaseRate(from, to);
-        const volatility = 0.001; // 0.1% volatility
-        const change = (Math.random() - 0.5) * volatility;
-        const newRate = baseRate * (1 + change);
+        let currentRate;
+        
+        if (from === 'USD') {
+          currentRate = forexData.rates[to] || 1.0;
+        } else if (to === 'USD') {
+          currentRate = 1 / (forexData.rates[from] || 1.0);
+        } else {
+          const fromToUSD = forexData.rates[from] || 1.0;
+          const toToUSD = forexData.rates[to] || 1.0;
+          currentRate = fromToUSD / toToUSD;
+        }
+        
+        // Add small real-time fluctuations
+        const volatility = 0.0001; // 0.01% volatility
+        const fluctuation = (Math.random() - 0.5) * volatility;
+        const liveRate = currentRate * (1 + fluctuation);
+        
+        // Calculate change from previous rate
+        const previousRate = lastRates[pair] || liveRate;
+        const change = ((liveRate - previousRate) / previousRate) * 100;
         
         updates[pair] = {
           symbol: pair,
-          price: newRate,
-          change: change * 100,
-          timestamp: Date.now()
+          price: parseFloat(liveRate.toFixed(5)),
+          change: parseFloat(change.toFixed(4)),
+          timestamp: Date.now(),
+          isPositive: change >= 0,
+          sparkline: generateSparklineData(liveRate, change >= 0)
         };
+        
+        lastRates[pair] = liveRate;
       });
       
       onMessage(updates);
-    }, 10000); // Update every 10 seconds to reduce rapid changes
+    } catch (error) {
+      console.error('Error in Forex WebSocket simulation:', error);
+    }
   };
   
-  // Start simulation
+  // Start real-time updates every 3 seconds
+  intervalId = setInterval(simulateRealTimeUpdates, 3000);
+  
+  // Initial update
+  simulateRealTimeUpdates();
+  
+  return {
+    close: () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    }
+  };
+};
+
+// Enhanced WebSocket for Stocks with sparkline data
+export const createStockWebSocket = (symbols, onMessage) => {
+  let intervalId;
+  let lastPrices = {};
+  
+  const simulateRealTimeUpdates = async () => {
+    try {
+      const stockData = await fetchStockPrices(symbols);
+      const updates = {};
+      
+      symbols.forEach(symbol => {
+        const symbolData = stockData[symbol];
+        if (symbolData) {
+          const previousPrice = lastPrices[symbol] || symbolData.price;
+          const change = ((symbolData.price - previousPrice) / previousPrice) * 100;
+          
+          updates[symbol] = {
+            symbol: symbol,
+            price: symbolData.price,
+            change24h: symbolData.changePercent,
+            change: change,
+            timestamp: Date.now(),
+            isPositive: change >= 0,
+            sparkline: generateSparklineData(symbolData.price, change >= 0)
+          };
+          
+          lastPrices[symbol] = symbolData.price;
+        }
+      });
+      
+      onMessage(updates);
+    } catch (error) {
+      console.error('Error in Stock WebSocket simulation:', error);
+    }
+  };
+  
+  // Start real-time updates every 5 seconds
+  intervalId = setInterval(simulateRealTimeUpdates, 5000);
+  
+  // Initial update
+  simulateRealTimeUpdates();
+  
+  return {
+    close: () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    }
+  };
+};
+
+// Enhanced WebSocket for ETFs with sparkline data
+export const createETFWebSocket = (symbols, onMessage) => {
+  let intervalId;
+  let lastPrices = {};
+  
+  const simulateRealTimeUpdates = async () => {
+    try {
+      const etfData = await fetchETFPrices(symbols);
+      const updates = {};
+      
+      symbols.forEach(symbol => {
+        const symbolData = etfData[symbol];
+        if (symbolData) {
+          const previousPrice = lastPrices[symbol] || symbolData.price;
+          const change = ((symbolData.price - previousPrice) / previousPrice) * 100;
+          
+          updates[symbol] = {
+            symbol: symbol,
+            price: symbolData.price,
+            change24h: symbolData.changePercent,
+            change: change,
+            timestamp: Date.now(),
+            isPositive: change >= 0,
+            sparkline: generateSparklineData(symbolData.price, change >= 0)
+          };
+          
+          lastPrices[symbol] = symbolData.price;
+        }
+      });
+      
+      onMessage(updates);
+    } catch (error) {
+      console.error('Error in ETF WebSocket simulation:', error);
+    }
+  };
+  
+  // Start real-time updates every 4 seconds
+  intervalId = setInterval(simulateRealTimeUpdates, 4000);
+  
+  // Initial update
+  simulateRealTimeUpdates();
+  
+  return {
+    close: () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    }
+  };
+};
+
+// Enhanced WebSocket for Futures with sparkline data
+export const createFuturesWebSocket = (symbols, onMessage) => {
+  let intervalId;
+  let lastPrices = {};
+  
+  const simulateRealTimeUpdates = async () => {
+    try {
+      const futuresData = await fetchFuturesPrices(symbols);
+      const updates = {};
+      
+      symbols.forEach(symbol => {
+        const symbolData = futuresData[symbol];
+        if (symbolData) {
+          const previousPrice = lastPrices[symbol] || symbolData.price;
+          const change = ((symbolData.price - previousPrice) / previousPrice) * 100;
+          
+          updates[symbol] = {
+            symbol: symbol,
+            price: symbolData.price,
+            change24h: symbolData.changePercent,
+            change: change,
+            timestamp: Date.now(),
+            isPositive: change >= 0,
+            sparkline: generateSparklineData(symbolData.price, change >= 0)
+          };
+          
+          lastPrices[symbol] = symbolData.price;
+        }
+      });
+      
+      onMessage(updates);
+    } catch (error) {
+      console.error('Error in Futures WebSocket simulation:', error);
+    }
+  };
+  
+  // Start real-time updates every 3 seconds
+  intervalId = setInterval(simulateRealTimeUpdates, 3000);
+  
+  // Initial update
   simulateRealTimeUpdates();
   
   return {

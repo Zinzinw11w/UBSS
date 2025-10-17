@@ -22,51 +22,37 @@ export default function MobileLanding() {
           <span className="text-gray-900 text-xl font-semibold">Tokenize</span>
         </Link>
         <div className="flex items-center space-x-3">
+          {/* Search Icon */}
           <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
             <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-          <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
-            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.828 7l2.586 2.586a2 2 0 002.828 0L12.828 7H4.828z" />
-            </svg>
-          </div>
+          {/* Notification Bell Icon */}
+          <Link to="/notifications" className="flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
+              <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </div>
+          </Link>
         </div>
       </header>
 
       <main className="px-1 pb-16">
-        {/* Balance Cards */}
+        {/* Balance Card */}
         <div className="relative mt-4">
-                {/* USDC Balance Card */}
-                <div className="bg-gradient-to-r from-gray-100 to-purple-100 rounded-md p-1.5 mb-1 relative z-10 border border-gray-200">
-                  <div className="flex items-center justify-between">
+                {/* Balance Card */}
+                <div className="bg-gray-600 rounded-xl p-4 relative shadow-lg">
+                  <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="text-gray-700 text-xs">USDC Balance</p>
-                      <p className="text-gray-900 text-base font-bold">
-                        {isConnected ? `${balance?.toFixed(4) || '0.0000'} USDC` : 'Connect Wallet'}
-                      </p>
-                    </div>
-                    <div className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold text-xs">C</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* USDT Balance Card */}
-                <div className="bg-gradient-to-r from-gray-100 to-green-100 rounded-md p-1.5 relative z-20 -mt-1 border border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-gray-700 text-xs">USDT Balance</p>
-                      <p className="text-gray-900 text-lg font-bold">
-                        {isConnected ? `${(balance * 0.99)?.toFixed(6) || '0.000000'} USDT` : 'Connect Wallet'}
+                      <p className="text-gray-200 text-sm font-medium">Balance</p>
+                      <p className="text-white text-2xl font-bold">
+                        {isConnected ? `$ ${(balance * 0.99)?.toFixed(6) || '0.000000'}` : 'Connect Wallet'}
                       </p>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <div className="w-5 h-5 bg-gray-900 rounded flex items-center justify-center">
-                        <span className="text-white font-bold text-xs">₮</span>
-                      </div>
-                      <button className="bg-green-500 text-white px-2 py-0.5 rounded-full text-xs font-semibold flex items-center space-x-1">
+                      <button className="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                         </svg>
@@ -74,9 +60,9 @@ export default function MobileLanding() {
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-1 text-gray-600 text-xs">
+                  <div className="flex items-center space-x-2 text-gray-200 text-sm">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                     <span>
                       {isConnected ? `$${(balance * 0.01)?.toFixed(8) || '0.00000000'} Today's Profit` : 'Connect wallet to see profit'}
@@ -127,9 +113,11 @@ export default function MobileLanding() {
               <p className="text-gray-600 text-sm mb-2">Lowest transactions fees &lt; 0.3%</p>
               <h2 className="text-gray-900 text-2xl font-bold mb-2">Trade all assets in one place</h2>
               <p className="text-gray-600 text-sm mb-6">Forex, crypto, stocks, indices, commodities</p>
-              <button className="bg-gray-900 text-white px-3 py-1.5 rounded-md font-semibold text-xs">
-                Get started
-              </button>
+              <Link to="/market">
+                <button className="bg-gray-900 text-white px-3 py-1.5 rounded-md font-semibold text-xs">
+                  Get started
+                </button>
+              </Link>
             </div>
           </div>
 
@@ -146,9 +134,11 @@ export default function MobileLanding() {
               <p className="text-gray-600 text-sm mb-2">Simple and stable</p>
               <h2 className="text-gray-900 text-2xl font-bold mb-2">Smart trading</h2>
               <p className="text-gray-600 text-sm mb-6">One click to create your earning plan</p>
-              <button className="bg-gray-900 text-white px-3 py-1.5 rounded-md font-semibold text-xs">
-                Get started
-              </button>
+              <Link to="/smart-trading">
+                <button className="bg-gray-900 text-white px-3 py-1.5 rounded-md font-semibold text-xs">
+                  Get started
+                </button>
+              </Link>
             </div>
           </div>
 
@@ -165,9 +155,11 @@ export default function MobileLanding() {
               <p className="text-gray-600 text-sm mb-2">Low interest rate and higher amount</p>
               <h2 className="text-gray-900 text-2xl font-bold mb-2">Cryptocurrency loans</h2>
               <p className="text-gray-600 text-sm mb-6">Borrow cryptocurrency spots without any collateral!</p>
-              <button className="bg-gray-900 text-white px-3 py-1.5 rounded-md font-semibold text-xs">
-                Get started
-              </button>
+              <Link to="/loan">
+                <button className="bg-gray-900 text-white px-3 py-1.5 rounded-md font-semibold text-xs">
+                  Get started
+                </button>
+              </Link>
             </div>
           </div>
         </div>

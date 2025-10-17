@@ -8,6 +8,10 @@ import {
   formatPrice, 
   formatPercentage,
   createForexWebSocket,
+  createCryptoWebSocket,
+  createStockWebSocket,
+  createETFWebSocket,
+  createFuturesWebSocket,
   fetchRealTimeForexRates,
   generateRealTimeChartData,
   createRealTimeForexWebSocket,
@@ -16,13 +20,15 @@ import {
   fetchETFPrices,
   fetchFuturesPrices
 } from '../services/api';
+import SparklineChart from './SparklineChart';
 
 const Market = () => {
   const [activeTab, setActiveTab] = useState('Forex');
   const [marketData, setMarketData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [forexWebSocket, setForexWebSocket] = useState(null);
+  const [webSocket, setWebSocket] = useState(null);
+  const [priceChanges, setPriceChanges] = useState({});
   const { t } = useLanguage();
 
   const tabs = [
@@ -39,6 +45,12 @@ const Market = () => {
       try {
         setLoading(true);
         setError(null);
+
+        // Close any existing WebSocket connection
+        if (webSocket) {
+          webSocket.close();
+          setWebSocket(null);
+        }
 
         if (activeTab === 'Forex') {
           // Fetch real-time Forex data
@@ -92,200 +104,224 @@ const Market = () => {
               flags: item.flags,
               flagUrls: item.flagUrls,
               chart: chartData,
+              sparkline: generateRealTimeChartData(item.rate, isPositive, 12),
               realTimePrice: item.rate,
               lastUpdated: forexData.last_updated || new Date().toISOString()
             };
           });
 
           setMarketData(mockData);
-          
-          // Set up real-time WebSocket for Forex updates
-          if (forexWebSocket) {
-            forexWebSocket.close();
-          }
-          
-          const pairs = forexPairs.map(item => item.pair);
-          const ws = createRealTimeForexWebSocket(pairs, (updates) => {
-            // Real-time updates with chart data
-            setMarketData(prevData => {
-              if (!prevData || prevData.length === 0) return prevData;
-              
-              return prevData.map(item => {
-                const update = updates[item.pair];
-                if (update) {
-                  return {
-                    ...item,
-                    value: formatPrice(update.price, item.pair.includes('JPY') ? 2 : 4),
-                    change: formatPercentage(update.change),
-                    isPositive: update.isPositive,
-                    chart: generateRealTimeChartData(update.price, update.isPositive),
-                    realTimePrice: update.price,
-                    lastUpdated: new Date().toISOString()
-                  };
-                }
-                return item;
-              });
-            });
-          });
-          
-          setForexWebSocket(ws);
         } else if (activeTab === 'Crypto') {
-          // Fetch real-time crypto data
-          let cryptoData;
-          try {
-            cryptoData = await fetchCryptoPrices(['bitcoin', 'ethereum', 'litecoin', 'polkadot', 'filecoin', 'dogecoin', 'ripple', 'tron', 'polygon', 'cardano', 'chainlink', 'cosmos']);
-          } catch (error) {
-            console.warn('Failed to fetch real-time crypto data, using fallback:', error);
-            cryptoData = {
-              bitcoin: { usd: 111954.74, usd_24h_change: 1.76 },
-              ethereum: { usd: 4121.62, usd_24h_change: 2.50 },
-              litecoin: { usd: 107.11, usd_24h_change: 2.44 },
-              polkadot: { usd: 3.98, usd_24h_change: 3.00 },
-              filecoin: { usd: 2.20, usd_24h_change: 1.68 },
-              dogecoin: { usd: 0.24, usd_24h_change: 4.50 },
-              ripple: { usd: 0.52, usd_24h_change: -1.20 },
-              tron: { usd: 0.08, usd_24h_change: 2.30 },
-              polygon: { usd: 0.89, usd_24h_change: 1.80 },
-              cardano: { usd: 0.45, usd_24h_change: 0.90 },
-              chainlink: { usd: 14.67, usd_24h_change: 3.20 },
-              cosmos: { usd: 8.23, usd_24h_change: -0.50 }
-            };
-          }
+          // Initialize Crypto data - NO API CALL, WebSocket only
+          console.log('🚀 Initializing Crypto tab with WebSocket-only data');
                const mockData = [
                  {
                    id: 1,
                    pair: 'BTC/USD',
                    country: 'Bitcoin',
-                   value: formatPrice(cryptoData.bitcoin?.usd || 111954.74, 2),
-                   change: formatPercentage(cryptoData.bitcoin?.usd_24h_change || 1.76),
-                   isPositive: (cryptoData.bitcoin?.usd_24h_change || 0) >= 0,
+                   value: '$0.00',
+                   change: '0.00%',
+                   isPositive: true,
                    flags: ['US', 'US'],
                    logo: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png',
-                   chart: generateRealTimeChartData(cryptoData.bitcoin?.usd || 111954.74, (cryptoData.bitcoin?.usd_24h_change || 0) >= 0)
+                   chart: generateRealTimeChartData(0, true),
+                   sparkline: generateRealTimeChartData(0, true, 12)
                  },
             {
               id: 2,
               pair: 'ETH/USD',
               country: 'Ethereum',
-              value: formatPrice(cryptoData.ethereum?.usd || 4121.62, 2),
-              change: formatPercentage(cryptoData.ethereum?.usd_24h_change || 2.50),
-              isPositive: (cryptoData.ethereum?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png',
-              chart: generateRealTimeChartData(cryptoData.ethereum?.usd || 4121.62, (cryptoData.ethereum?.usd_24h_change || 0) >= 0)
+                   chart: generateRealTimeChartData(0, true),
+                   sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 3,
               pair: 'LTC/USD',
               country: 'Litecoin',
-              value: formatPrice(cryptoData.litecoin?.usd || 107.11, 2),
-              change: formatPercentage(cryptoData.litecoin?.usd_24h_change || 2.44),
-              isPositive: (cryptoData.litecoin?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/2/large/litecoin.png',
-              chart: generateRealTimeChartData(cryptoData.litecoin?.usd || 107.11, (cryptoData.litecoin?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 4,
               pair: 'DOT/USD',
               country: 'Polkadot',
-              value: formatPrice(cryptoData.polkadot?.usd || 3.98, 4),
-              change: formatPercentage(cryptoData.polkadot?.usd_24h_change || 3.00),
-              isPositive: (cryptoData.polkadot?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/12171/large/polkadot.png',
-              chart: generateRealTimeChartData(cryptoData.polkadot?.usd || 3.98, (cryptoData.polkadot?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 5,
               pair: 'FIL/USD',
               country: 'Filecoin',
-              value: formatPrice(cryptoData.filecoin?.usd || 2.20, 4),
-              change: formatPercentage(cryptoData.filecoin?.usd_24h_change || 1.68),
-              isPositive: (cryptoData.filecoin?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/12817/large/filecoin.png',
-              chart: generateRealTimeChartData(cryptoData.filecoin?.usd || 2.20, (cryptoData.filecoin?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 6,
               pair: 'DOGE/USD',
               country: 'Dogecoin',
-              value: formatPrice(cryptoData.dogecoin?.usd || 0.24, 4),
-              change: formatPercentage(cryptoData.dogecoin?.usd_24h_change || 2.73),
-              isPositive: (cryptoData.dogecoin?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/5/large/dogecoin.png',
-              chart: generateRealTimeChartData(cryptoData.dogecoin?.usd || 0.24, (cryptoData.dogecoin?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 7,
               pair: 'XRP/USD',
               country: 'XRP',
-              value: formatPrice(cryptoData.ripple?.usd || 2.87, 4),
-              change: formatPercentage(cryptoData.ripple?.usd_24h_change || 2.13),
-              isPositive: (cryptoData.ripple?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
-              chart: generateRealTimeChartData(cryptoData.ripple?.usd || 2.87, (cryptoData.ripple?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 8,
               pair: 'TRX/USD',
               country: 'TRON',
-              value: formatPrice(cryptoData.tron?.usd || 0.34, 4),
-              change: formatPercentage(cryptoData.tron?.usd_24h_change || 0.02),
-              isPositive: (cryptoData.tron?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png',
-              chart: generateRealTimeChartData(cryptoData.tron?.usd || 0.34, (cryptoData.tron?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 9,
               pair: 'MATIC/USD',
               country: 'Polygon',
-              value: formatPrice(cryptoData.polygon?.usd || 0.08, 4),
-              change: formatPercentage(cryptoData.polygon?.usd_24h_change || -83.27),
-              isPositive: (cryptoData.polygon?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png',
-              chart: generateRealTimeChartData(cryptoData.polygon?.usd || 0.89, (cryptoData.polygon?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 10,
               pair: 'ADA/USD',
               country: 'Cardano',
-              value: formatPrice(cryptoData.cardano?.usd || 0.80, 4),
-              change: formatPercentage(cryptoData.cardano?.usd_24h_change || 2.59),
-              isPositive: (cryptoData.cardano?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/975/large/cardano.png',
-              chart: generateRealTimeChartData(cryptoData.cardano?.usd || 0.80, (cryptoData.cardano?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 11,
               pair: 'LINK/USD',
               country: 'Chainlink',
-              value: formatPrice(cryptoData.chainlink?.usd || 21.49, 4),
-              change: formatPercentage(cryptoData.chainlink?.usd_24h_change || 2.42),
-              isPositive: (cryptoData.chainlink?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png',
-              chart: generateRealTimeChartData(cryptoData.chainlink?.usd || 21.49, (cryptoData.chainlink?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             },
             {
               id: 12,
               pair: 'ATOM/USD',
               country: 'Cosmos',
-              value: formatPrice(cryptoData.cosmos?.usd || 4.16, 4),
-              change: formatPercentage(cryptoData.cosmos?.usd_24h_change || 1.54),
-              isPositive: (cryptoData.cosmos?.usd_24h_change || 0) >= 0,
+              value: '$0.00',
+              change: '0.00%',
+              isPositive: true,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/1481/large/cosmos_hub.png',
-              chart: generateRealTimeChartData(cryptoData.cosmos?.usd || 4.16, (cryptoData.cosmos?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12)
             }
           ];
           setMarketData(mockData);
+          
+          // Create Crypto WebSocket for real-time updates
+          const cryptoWebSocket = createCryptoWebSocket(
+            ['bitcoin', 'ethereum', 'litecoin', 'polkadot', 'filecoin', 'dogecoin', 'ripple', 'tron', 'polygon', 'cardano', 'chainlink', 'cosmos'],
+            (updates) => {
+              console.log('🔄 Market component received WebSocket updates:', updates);
+              setMarketData(prevData => 
+                prevData.map(item => {
+                  // Map display symbols to API symbols
+                  const symbolMap = {
+                    'BTC/USD': 'bitcoin',
+                    'ETH/USD': 'ethereum',
+                    'LTC/USD': 'litecoin', 
+                    'DOT/USD': 'polkadot',
+                    'FIL/USD': 'filecoin',
+                    'DOGE/USD': 'dogecoin',
+                    'XRP/USD': 'ripple',
+                    'TRX/USD': 'tron',
+                    'MATIC/USD': 'polygon',
+                    'ADA/USD': 'cardano',
+                    'LINK/USD': 'chainlink',
+                    'ATOM/USD': 'cosmos'
+                  };
+                  const apiSymbol = symbolMap[item.pair] || item.pair.toLowerCase();
+                  const update = updates[apiSymbol];
+                  console.log(`🔍 Checking ${item.pair} -> ${apiSymbol}:`, update ? 'FOUND' : 'NOT FOUND');
+                  if (update) {
+                    console.log(`💰 Updating ${item.pair} with price: $${update.price} (${update.change24h}%)`);
+                    
+                    // Track price changes for visual feedback
+                    setPriceChanges(prev => ({
+                      ...prev,
+                      [item.pair]: update.isPositive ? 'increase' : 'decrease'
+                    }));
+                    
+                    // Clear visual feedback after animation
+                    setTimeout(() => {
+                      setPriceChanges(prev => ({
+                        ...prev,
+                        [item.pair]: null
+                      }));
+                    }, 1000);
+
+                    return {
+                      ...item,
+                      value: formatPrice(update.price, 2),
+                      change: formatPercentage(update.change24h),
+                      isPositive: update.isPositive,
+                      sparkline: update.sparkline,
+                      realTimePrice: update.price,
+                      lastUpdated: new Date().toISOString()
+                    };
+                  }
+                  return item;
+                })
+              );
+            }
+          );
+          
+          // Store WebSocket for cleanup
+          setWebSocket(cryptoWebSocket);
         } else if (activeTab === 'Stocks') {
           // Fetch real-time stock data
           let stockData;
@@ -624,7 +660,7 @@ const Market = () => {
               pair: 'ES',
               country: 'E-mini S&P 500',
               value: formatPrice(futuresData.ES?.price || 4567.25, 2),
-              change: formatPercentage(futuresData.ES?.changePercent || 0.02),
+              change: formatPercentage(futuresData.ES?.changePercent || 0),
               isPositive: (futuresData.ES?.changePercent || 0) >= 0,
               flags: ['US', 'US'],
               chart: generateRealTimeChartData(futuresData.ES?.price || 4567.25, (futuresData.ES?.changePercent || 0) >= 0)
@@ -762,9 +798,10 @@ const Market = () => {
     
     return () => {
       clearInterval(interval);
-      if (forexWebSocket) {
-        forexWebSocket.close();
-      }
+        if (webSocket) {
+          webSocket.close();
+          setWebSocket(null);
+        }
     };
        }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -773,8 +810,8 @@ const Market = () => {
       id: 1,
       pair: 'BTC/USD',
       country: 'Bitcoin',
-      value: '$111690.1389',
-      change: '1.52%',
+      value: '$0.00',
+      change: '0.00%',
       isPositive: true,
       flags: ['US', 'US'],
       logo: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png'
@@ -783,8 +820,8 @@ const Market = () => {
       id: 2,
       pair: 'ETH/USD',
       country: 'Ethereum',
-      value: '$4105.6800',
-      change: '2.11%',
+      value: '$0.00',
+      change: '0.00%',
       isPositive: true,
       flags: ['US', 'US'],
       logo: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png'
@@ -1277,7 +1314,10 @@ const Market = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-medium text-gray-900 text-sm">{item.value}</div>
+                          <div className={`font-medium text-gray-900 text-sm transition-colors duration-1000 ${
+                            priceChanges[item.pair] === 'increase' ? 'bg-green-100' : 
+                            priceChanges[item.pair] === 'decrease' ? 'bg-red-100' : ''
+                          }`}>{item.value}</div>
                           <div className={`text-xs font-medium ${
                             item.isPositive ? 'text-green-600' : 'text-red-600'
                           }`}>
@@ -1286,7 +1326,12 @@ const Market = () => {
                         </div>
                       </div>
                       <div className="flex justify-center">
-                        <PriceChart data={item.chart} isPositive={item.isPositive} />
+                        <SparklineChart 
+                          data={item.sparkline || item.chart} 
+                          isPositive={item.isPositive}
+                          width={60}
+                          height={20}
+                        />
                       </div>
                     </div>
 
@@ -1352,11 +1397,19 @@ const Market = () => {
                       
                       {/* Chart */}
                       <div className="flex justify-center">
-                        <PriceChart data={item.chart} isPositive={item.isPositive} />
+                        <SparklineChart 
+                          data={item.sparkline || item.chart} 
+                          isPositive={item.isPositive}
+                          width={60}
+                          height={20}
+                        />
                       </div>
                       
                       {/* Price */}
-                      <div className="font-medium text-gray-900 text-right">{item.value}</div>
+                      <div className={`font-medium text-gray-900 text-right transition-colors duration-1000 ${
+                        priceChanges[item.pair] === 'increase' ? 'bg-green-100' : 
+                        priceChanges[item.pair] === 'decrease' ? 'bg-red-100' : ''
+                      }`}>{item.value}</div>
                     </div>
                   </motion.div>
                 </Link>

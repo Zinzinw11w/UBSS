@@ -9,50 +9,43 @@ import {
   fetchFuturesPrices,
   formatPrice,
   formatPercentage,
-  generateRealTimeChartData
+  generateRealTimeChartData,
+  createCryptoWebSocket,
+  createForexWebSocket,
+  createStockWebSocket,
+  createETFWebSocket,
+  createFuturesWebSocket
 } from '../services/api';
+import SparklineChart from './SparklineChart';
 
 export default function MobileMarket() {
   const [activeTab, setActiveTab] = useState('Forex');
   const [marketData, setMarketData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [webSocket, setWebSocket] = useState(null);
+  const [priceChanges, setPriceChanges] = useState({});
 
   const tabs = ['Forex', 'Crypto', 'Stocks', 'ETF', 'Futures'];
 
-  // Fetch real-time market data
+  // Real-time WebSocket data integration
   useEffect(() => {
-    const fetchData = async () => {
+    // Close existing WebSocket
+    if (webSocket) {
+      webSocket.close();
+    }
+
+    const initializeRealTimeData = async () => {
       setLoading(true);
       setError(null);
       
       try {
         let transformedData = [];
+        let newWebSocket = null;
         
         if (activeTab === 'Forex') {
-          // Fetch real-time Forex data
-          let forexData;
-          try {
-            forexData = await fetchRealTimeForexRates();
-          } catch (error) {
-            console.warn('Failed to fetch real-time Forex data, using fallback:', error);
-            forexData = {
-              rates: {
-                CHF: 0.8963,
-                JPY: 152.00,
-                EUR: 0.9200,
-                GBP: 0.7900,
-                CAD: 1.3600,
-                AUD: 1.5200,
-                HKD: 7.8000,
-                SGD: 1.3500,
-                CNY: 7.2000
-              },
-              last_updated: new Date().toISOString()
-            };
-          }
-          
-          // Create Forex pairs with proper structure
+          // Initialize Forex data
+          const forexData = await fetchRealTimeForexRates();
           const forexPairs = [
             { pair: 'USD/CHF', country: 'Switzerland', flags: ['US', 'CH'], rate: forexData.rates?.CHF || 0.8963, flagUrls: ['https://flagcdn.com/32x24/us.png', 'https://flagcdn.com/32x24/ch.png'] },
             { pair: 'USD/JPY', country: 'Japan', flags: ['US', 'JP'], rate: forexData.rates?.JPY || 152.00, flagUrls: ['https://flagcdn.com/32x24/us.png', 'https://flagcdn.com/32x24/jp.png'] },
@@ -80,19 +73,52 @@ export default function MobileMarket() {
               flags: item.flags,
               flagUrls: item.flagUrls,
               chart: generateRealTimeChartData(item.rate, isPositive),
+              sparkline: generateRealTimeChartData(item.rate, isPositive, 12),
               realTimePrice: item.rate,
               lastUpdated: forexData.last_updated || new Date().toISOString()
             };
           });
+
+          // Create Forex WebSocket
+          newWebSocket = createForexWebSocket(
+            forexPairs.map(p => p.pair),
+            (updates) => {
+              setMarketData(prevData => 
+                prevData.map(item => {
+                  const update = updates[item.pair];
+                  if (update) {
+                    // Track price changes for visual feedback
+                    setPriceChanges(prev => ({
+                      ...prev,
+                      [item.pair]: update.isPositive ? 'increase' : 'decrease'
+                    }));
+                    
+                    // Clear visual feedback after animation
+                    setTimeout(() => {
+                      setPriceChanges(prev => ({
+                        ...prev,
+                        [item.pair]: null
+                      }));
+                    }, 1000);
+
+                    return {
+                      ...item,
+                      price: formatPrice(update.price, item.pair.includes('JPY') ? 2 : 4),
+                      change: formatPercentage(update.change),
+                      isPositive: update.isPositive,
+                      sparkline: update.sparkline,
+                      realTimePrice: update.price,
+                      lastUpdated: new Date().toISOString()
+                    };
+                  }
+                  return item;
+                })
+              );
+            }
+          );
         } else if (activeTab === 'Crypto') {
-          // Fetch real-time crypto data
-          let cryptoData;
-          try {
-            cryptoData = await fetchCryptoPrices(['bitcoin', 'ethereum', 'litecoin', 'polkadot', 'filecoin', 'dogecoin', 'ripple', 'tron', 'polygon', 'cardano', 'chainlink', 'cosmos']);
-          } catch (error) {
-            console.warn('Failed to fetch real-time crypto data, using fallback:', error);
-            cryptoData = {};
-          }
+          // Initialize Crypto data - NO API CALL, WebSocket only
+          console.log('🚀 Initializing Crypto tab with WebSocket-only data');
           
           const cryptoPairs = [
             { symbol: 'BTC', name: 'Bitcoin', logo: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png' },
@@ -110,34 +136,100 @@ export default function MobileMarket() {
           ];
 
           transformedData = cryptoPairs.map((item, index) => {
-            const cryptoInfo = cryptoData[item.symbol.toLowerCase()] || {};
-            const price = cryptoInfo.price || Math.random() * 50000 + 1000;
-            const change24h = cryptoInfo.change24h || (Math.random() - 0.5) * 10;
-            const isPositive = change24h >= 0;
-            
+            // Start with zero values - WebSocket will populate real data
             return {
               id: index + 1,
               pair: item.symbol,
               symbol: item.name,
-              price: formatPrice(price, 2),
-              change: formatPercentage(change24h),
-              isPositive: isPositive,
-              flags: ['US', 'US'], // Crypto doesn't have country flags
+              price: '$0.00',
+              change: '0.00%',
+              isPositive: true,
+              flags: ['US', 'US'],
               logo: item.logo,
-              chart: generateRealTimeChartData(price, isPositive),
-              realTimePrice: price,
+              chart: generateRealTimeChartData(0, true),
+              sparkline: generateRealTimeChartData(0, true, 12),
+              realTimePrice: 0,
               lastUpdated: new Date().toISOString()
             };
           });
+
+          // Create Crypto WebSocket
+          newWebSocket = createCryptoWebSocket(
+            cryptoPairs.map(p => {
+              // Map display symbols to API symbols
+              const symbolMap = {
+                'BTC': 'bitcoin',
+                'ETH': 'ethereum', 
+                'LTC': 'litecoin',
+                'DOT': 'polkadot',
+                'FIL': 'filecoin',
+                'DOGE': 'dogecoin',
+                'XRP': 'ripple',
+                'TRX': 'tron',
+                'MATIC': 'polygon',
+                'ADA': 'cardano',
+                'LINK': 'chainlink',
+                'ATOM': 'cosmos'
+              };
+              return symbolMap[p.symbol] || p.symbol.toLowerCase();
+            }),
+            (updates) => {
+              console.log('🔄 MobileMarket component received WebSocket updates:', updates);
+              setMarketData(prevData => 
+                prevData.map(item => {
+                  // Map display symbols to API symbols
+                  const symbolMap = {
+                    'BTC': 'bitcoin',
+                    'ETH': 'ethereum',
+                    'LTC': 'litecoin', 
+                    'DOT': 'polkadot',
+                    'FIL': 'filecoin',
+                    'DOGE': 'dogecoin',
+                    'XRP': 'ripple',
+                    'TRX': 'tron',
+                    'MATIC': 'polygon',
+                    'ADA': 'cardano',
+                    'LINK': 'chainlink',
+                    'ATOM': 'cosmos'
+                  };
+                  const apiSymbol = symbolMap[item.pair] || item.pair.toLowerCase();
+                  const update = updates[apiSymbol];
+                  console.log(`🔍 MobileMarket checking ${item.pair} -> ${apiSymbol}:`, update ? 'FOUND' : 'NOT FOUND');
+                  if (update) {
+                    console.log(`💰 MobileMarket updating ${item.pair} with price: $${update.price} (${update.change24h}%)`);
+                    
+                    // Track price changes for visual feedback
+                    setPriceChanges(prev => ({
+                      ...prev,
+                      [item.pair]: update.isPositive ? 'increase' : 'decrease'
+                    }));
+                    
+                    // Clear visual feedback after animation
+                    setTimeout(() => {
+                      setPriceChanges(prev => ({
+                        ...prev,
+                        [item.pair]: null
+                      }));
+                    }, 1000);
+
+                    return {
+                      ...item,
+                      price: formatPrice(update.price, 2),
+                      change: formatPercentage(update.change24h),
+                      isPositive: update.isPositive,
+                      sparkline: update.sparkline,
+                      realTimePrice: update.price,
+                      lastUpdated: new Date().toISOString()
+                    };
+                  }
+                  return item;
+                })
+              );
+            }
+          );
         } else if (activeTab === 'Stocks') {
-          // Fetch real-time stock data
-          let stockData;
-          try {
-            stockData = await fetchStockPrices(['AAPL', 'TSLA', 'AMZN', 'GOOGL', 'MSFT', 'UNH', 'AI', 'BRZE', 'FLNC', 'SNOW', 'BB', 'EVGO', 'MQ']);
-          } catch (error) {
-            console.warn('Failed to fetch real-time stock data, using fallback:', error);
-            stockData = {};
-          }
+          // Initialize Stock data
+          const stockData = await fetchStockPrices(['AAPL', 'TSLA', 'AMZN', 'GOOGL', 'MSFT', 'UNH', 'AI', 'BRZE', 'FLNC', 'SNOW', 'BB', 'EVGO', 'MQ']);
           
           const stockPairs = [
             { symbol: 'AAPL', name: 'Apple Inc.', logo: 'https://logo.clearbit.com/apple.com' },
@@ -168,15 +260,56 @@ export default function MobileMarket() {
               price: formatPrice(price, 2),
               change: formatPercentage(change24h),
               isPositive: isPositive,
-              flags: ['US', 'US'], // US stocks
+              flags: ['US', 'US'],
               logo: item.logo,
               chart: generateRealTimeChartData(price, isPositive),
+              sparkline: generateRealTimeChartData(price, isPositive, 12),
               realTimePrice: price,
               lastUpdated: new Date().toISOString()
             };
           });
+
+          // Create Stock WebSocket
+          newWebSocket = createStockWebSocket(
+            stockPairs.map(p => p.symbol),
+            (updates) => {
+              setMarketData(prevData => 
+                prevData.map(item => {
+                  const update = updates[item.pair];
+                  if (update) {
+                    // Track price changes for visual feedback
+                    setPriceChanges(prev => ({
+                      ...prev,
+                      [item.pair]: update.isPositive ? 'increase' : 'decrease'
+                    }));
+                    
+                    // Clear visual feedback after animation
+                    setTimeout(() => {
+                      setPriceChanges(prev => ({
+                        ...prev,
+                        [item.pair]: null
+                      }));
+                    }, 1000);
+
+                    return {
+                      ...item,
+                      price: formatPrice(update.price, 2),
+                      change: formatPercentage(update.change),
+                      isPositive: update.isPositive,
+                      sparkline: update.sparkline,
+                      realTimePrice: update.price,
+                      lastUpdated: new Date().toISOString()
+                    };
+                  }
+                  return item;
+                })
+              );
+            }
+          );
         } else if (activeTab === 'ETF') {
-          // ETF data
+          // Initialize ETF data
+          const etfData = await fetchETFPrices(['SPY', 'QQQ', 'GLD', 'VTI', 'IWM', 'EFA', 'VEA', 'EEM', 'XLF', 'XLK', 'XLE', 'XLV']);
+          
           const etfPairs = [
             { symbol: 'SPY', name: 'SPDR S&P 500 ETF', logo: 'https://logo.clearbit.com/spdrs.com' },
             { symbol: 'QQQ', name: 'Invesco QQQ Trust', logo: 'https://logo.clearbit.com/invesco.com' },
@@ -191,8 +324,9 @@ export default function MobileMarket() {
           ];
 
           transformedData = etfPairs.map((item, index) => {
-            const price = Math.random() * 200 + 50;
-            const change24h = (Math.random() - 0.5) * 3;
+            const etfInfo = etfData[item.symbol] || {};
+            const price = etfInfo.price || Math.random() * 200 + 50;
+            const change24h = etfInfo.changePercent || (Math.random() - 0.5) * 3;
             const isPositive = change24h >= 0;
             
             return {
@@ -205,12 +339,53 @@ export default function MobileMarket() {
               flags: ['US', 'US'],
               logo: item.logo,
               chart: generateRealTimeChartData(price, isPositive),
+              sparkline: generateRealTimeChartData(price, isPositive, 12),
               realTimePrice: price,
               lastUpdated: new Date().toISOString()
             };
           });
+
+          // Create ETF WebSocket
+          newWebSocket = createETFWebSocket(
+            etfPairs.map(p => p.symbol),
+            (updates) => {
+              setMarketData(prevData => 
+                prevData.map(item => {
+                  const update = updates[item.pair];
+                  if (update) {
+                    // Track price changes for visual feedback
+                    setPriceChanges(prev => ({
+                      ...prev,
+                      [item.pair]: update.isPositive ? 'increase' : 'decrease'
+                    }));
+                    
+                    // Clear visual feedback after animation
+                    setTimeout(() => {
+                      setPriceChanges(prev => ({
+                        ...prev,
+                        [item.pair]: null
+                      }));
+                    }, 1000);
+
+                    return {
+                      ...item,
+                      price: formatPrice(update.price, 2),
+                      change: formatPercentage(update.change),
+                      isPositive: update.isPositive,
+                      sparkline: update.sparkline,
+                      realTimePrice: update.price,
+                      lastUpdated: new Date().toISOString()
+                    };
+                  }
+                  return item;
+                })
+              );
+            }
+          );
         } else if (activeTab === 'Futures') {
-          // Futures data
+          // Initialize Futures data
+          const futuresData = await fetchFuturesPrices(['ES', 'GC', 'CL', 'NQ', 'YM', 'RTY', 'NG', 'ZB', 'ZN', 'ZF']);
+          
           const futuresPairs = [
             { symbol: 'ES', name: 'E-mini S&P 500', logo: 'https://logo.clearbit.com/cmegroup.com' },
             { symbol: 'NQ', name: 'E-mini NASDAQ-100', logo: 'https://logo.clearbit.com/cmegroup.com' },
@@ -225,8 +400,9 @@ export default function MobileMarket() {
           ];
 
           transformedData = futuresPairs.map((item, index) => {
-            const price = Math.random() * 5000 + 1000;
-            const change24h = (Math.random() - 0.5) * 2;
+            const futuresInfo = futuresData[item.symbol] || {};
+            const price = futuresInfo.price || Math.random() * 5000 + 1000;
+            const change24h = futuresInfo.changePercent || (Math.random() - 0.5) * 2;
             const isPositive = change24h >= 0;
             
             return {
@@ -239,15 +415,55 @@ export default function MobileMarket() {
               flags: ['US', 'US'],
               logo: item.logo,
               chart: generateRealTimeChartData(price, isPositive),
+              sparkline: generateRealTimeChartData(price, isPositive, 12),
               realTimePrice: price,
               lastUpdated: new Date().toISOString()
             };
           });
+
+          // Create Futures WebSocket
+          newWebSocket = createFuturesWebSocket(
+            futuresPairs.map(p => p.symbol),
+            (updates) => {
+              setMarketData(prevData => 
+                prevData.map(item => {
+                  const update = updates[item.pair];
+                  if (update) {
+                    // Track price changes for visual feedback
+                    setPriceChanges(prev => ({
+                      ...prev,
+                      [item.pair]: update.isPositive ? 'increase' : 'decrease'
+                    }));
+                    
+                    // Clear visual feedback after animation
+                    setTimeout(() => {
+                      setPriceChanges(prev => ({
+                        ...prev,
+                        [item.pair]: null
+                      }));
+                    }, 1000);
+
+                    return {
+                      ...item,
+                      price: formatPrice(update.price, 2),
+                      change: formatPercentage(update.change),
+                      isPositive: update.isPositive,
+                      sparkline: update.sparkline,
+                      realTimePrice: update.price,
+                      lastUpdated: new Date().toISOString()
+                    };
+                  }
+                  return item;
+                })
+              );
+            }
+          );
         }
         
         setMarketData(transformedData);
+        setWebSocket(newWebSocket);
       } catch (err) {
-        console.error('Error fetching market data:', err);
+        console.error('Error initializing real-time data:', err);
         setError('Failed to load market data');
         setMarketData(getFallbackData());
       } finally {
@@ -255,13 +471,14 @@ export default function MobileMarket() {
       }
     };
 
-    // Initialize with fallback data first
-    setMarketData(getFallbackData());
-    fetchData();
+    initializeRealTimeData();
     
-    // Refresh data every 30 seconds
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    // Cleanup function
+    return () => {
+      if (webSocket) {
+        webSocket.close();
+      }
+    };
   }, [activeTab]);
 
   const getFallbackData = () => {
@@ -440,12 +657,23 @@ export default function MobileMarket() {
                     </div>
                     <h3 className="text-gray-900 font-bold text-xs mb-0.5">{item.pair}</h3>
                     <p className="text-gray-600 text-xs mb-1">{item.symbol}</p>
-                    <p className="text-gray-900 font-bold text-sm mb-0.5">{item.price}</p>
+                    <p className={`text-gray-900 font-bold text-sm mb-0.5 transition-colors duration-1000 ${
+                      priceChanges[item.pair] === 'increase' ? 'bg-green-100' : 
+                      priceChanges[item.pair] === 'decrease' ? 'bg-red-100' : ''
+                    }`}>{item.price}</p>
                     <p className={`text-xs font-medium ${
                       item.isPositive ? 'text-green-600' : 'text-red-600'
                     }`}>
                       {item.change}
                     </p>
+                    <div className="mt-1">
+                      <SparklineChart 
+                        data={item.sparkline} 
+                        isPositive={item.isPositive}
+                        width={40}
+                        height={15}
+                      />
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -518,19 +746,19 @@ export default function MobileMarket() {
 
                       {/* Chart */}
                       <div className="flex items-center">
-                        <div className={`w-8 h-4 rounded ${
-                          item.isPositive ? 'bg-green-100' : 'bg-red-100'
-                        }`}>
-                          <div className={`w-full h-full rounded ${
-                            item.isPositive ? 'bg-green-500' : 'bg-red-500'
-                          }`} style={{
-                            clipPath: 'polygon(0% 100%, 25% 80%, 50% 60%, 75% 40%, 100% 20%)'
-                          }}></div>
-                        </div>
+                        <SparklineChart 
+                          data={item.sparkline} 
+                          isPositive={item.isPositive}
+                          width={60}
+                          height={20}
+                        />
                       </div>
 
                       {/* Price */}
-                      <div className="text-gray-900 font-medium text-xs">
+                      <div className={`text-gray-900 font-medium text-xs transition-colors duration-1000 ${
+                        priceChanges[item.pair] === 'increase' ? 'bg-green-100' : 
+                        priceChanges[item.pair] === 'decrease' ? 'bg-red-100' : ''
+                      }`}>
                         {item.price}
                       </div>
                     </div>

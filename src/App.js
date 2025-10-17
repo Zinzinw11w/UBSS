@@ -12,6 +12,7 @@ import MobileSmartTrading from './components/MobileSmartTrading';
 import MobileLoan from './components/MobileLoan';
 import MobileAccount from './components/MobileAccount';
 import MobileTradingDetail from './components/MobileTradingDetail';
+import MobileNotifications from './components/MobileNotifications';
 import Footer from './components/Footer';
 import Account from './components/Account';
 import Market from './components/Market';
@@ -80,6 +81,7 @@ function App() {
                 </>
               )
             } />
+            <Route path="/notifications" element={<MobileNotifications />} />
                 <Route path="/trading/:category/*" element={
                   isMobile ? <MobileTradingDetail /> : (
                     <>
