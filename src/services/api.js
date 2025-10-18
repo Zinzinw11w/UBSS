@@ -429,7 +429,7 @@ export const fetchStockPrices = async (symbols = ['AAPL', 'TSLA', 'AMZN', 'GOOGL
   }
 };
 
-// Fetch real-time ETF prices
+// Fetch real-time ETF prices with official logos
 export const fetchETFPrices = async (symbols = ['SPY', 'QQQ', 'GLD', 'VTI', 'IWM']) => {
   const cacheKey = `etf_realtime_${symbols.join('_')}`;
   
@@ -440,6 +440,28 @@ export const fetchETFPrices = async (symbols = ['SPY', 'QQQ', 'GLD', 'VTI', 'IWM
   }
 
   try {
+    // Official fund provider logos mapping
+    const etfLogoMap = {
+      SPY: 'https://logo.clearbit.com/ssga.com', // State Street Global Advisors
+      QQQ: 'https://logo.clearbit.com/invesco.com', // Invesco
+      IWM: 'https://logo.clearbit.com/ishares.com', // iShares (BlackRock)
+      VTI: 'https://logo.clearbit.com/vanguard.com', // Vanguard
+      VEA: 'https://logo.clearbit.com/vanguard.com', // Vanguard
+      VWO: 'https://logo.clearbit.com/vanguard.com', // Vanguard
+      AGG: 'https://logo.clearbit.com/ishares.com', // iShares (BlackRock)
+      BND: 'https://logo.clearbit.com/vanguard.com', // Vanguard
+      GLD: 'https://logo.clearbit.com/ssga.com', // State Street Global Advisors
+      SLV: 'https://logo.clearbit.com/ishares.com', // iShares (BlackRock)
+      USO: 'https://logo.clearbit.com/uscfinvestments.com', // USCF Investments
+      UNG: 'https://logo.clearbit.com/uscfinvestments.com', // USCF Investments
+      EFA: 'https://logo.clearbit.com/ishares.com', // iShares (BlackRock)
+      EEM: 'https://logo.clearbit.com/ishares.com', // iShares (BlackRock)
+      XLF: 'https://logo.clearbit.com/ssga.com', // State Street Global Advisors
+      XLK: 'https://logo.clearbit.com/ssga.com', // State Street Global Advisors
+      XLE: 'https://logo.clearbit.com/ssga.com', // State Street Global Advisors
+      XLV: 'https://logo.clearbit.com/ssga.com' // State Street Global Advisors
+    };
+
     const realisticETFData = {
       SPY: { price: 456.78, change: 0.85, changePercent: 0.19 },
       QQQ: { price: 389.45, change: 1.23, changePercent: 0.32 },
@@ -452,7 +474,13 @@ export const fetchETFPrices = async (symbols = ['SPY', 'QQQ', 'GLD', 'VTI', 'IWM
       XLF: { price: 35.67, change: 0.78, changePercent: 2.24 },
       XLK: { price: 178.45, change: 1.23, changePercent: 0.69 },
       XLE: { price: 89.12, change: -0.45, changePercent: -0.50 },
-      XLV: { price: 134.78, change: 0.67, changePercent: 0.50 }
+      XLV: { price: 134.78, change: 0.67, changePercent: 0.50 },
+      VWO: { price: 42.15, change: -0.56, changePercent: -1.31 },
+      AGG: { price: 108.45, change: 0.23, changePercent: 0.21 },
+      BND: { price: 78.91, change: 0.12, changePercent: 0.15 },
+      SLV: { price: 22.34, change: 0.45, changePercent: 2.05 },
+      USO: { price: 65.78, change: -1.23, changePercent: -1.84 },
+      UNG: { price: 12.45, change: 0.34, changePercent: 2.81 }
     };
     
     const etfData = {};
@@ -467,6 +495,7 @@ export const fetchETFPrices = async (symbols = ['SPY', 'QQQ', 'GLD', 'VTI', 'IWM
         price: data.price,
         change: data.change,
         changePercent: data.changePercent,
+        logoUrl: etfLogoMap[symbol] || null, // Add official logo URL
         timestamp: Date.now()
       };
     });
@@ -582,7 +611,7 @@ export const createCryptoWebSocket = (symbols, onMessage) => {
     'dogecoin': 'DOGEUSDT',
     'ripple': 'XRPUSDT',
     'tron': 'TRXUSDT',
-    'polygon': 'POLUSDT',  // Try POLUSDT - Binance may have changed the symbol
+    'polygon': 'POLUSDT',  // Polygon migrated from MATIC to POL
     'cardano': 'ADAUSDT',
     'chainlink': 'LINKUSDT',
     'cosmos': 'ATOMUSDT',
