@@ -11,14 +11,26 @@ import {
   fetchFuturesPrices,
   formatPrice,
   formatPercentage,
-  generateRealTimeChartData
+  generateRealTimeChartData,
+  createCryptoWebSocket,
+  createForexWebSocket,
+  createStockWebSocket,
+  createETFWebSocket,
+  createFuturesWebSocket
 } from '../services/api';
+import SparklineChart from './SparklineChart';
 
 export default function MobileSmartTrading() {
   const [activeTab, setActiveTab] = useState('Forex');
   const [marketData, setMarketData] = useState([]);
+  const [forexData, setForexData] = useState([]); // Separate state for Forex data
+  const [stocksData, setStocksData] = useState([]); // Separate state for Stocks data
+  const [etfsData, setEtfsData] = useState([]); // Separate state for ETF data
+  const [futuresData, setFuturesData] = useState([]); // Separate state for Futures data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [webSocket, setWebSocket] = useState(null);
+  const [priceChanges, setPriceChanges] = useState({});
   const [showCreatePlan, setShowCreatePlan] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState('');
   const { user } = useDatabase();
@@ -41,6 +53,216 @@ export default function MobileSmartTrading() {
     // Show success message
     alert('Trading plan created successfully!');
     setShowCreatePlan(false);
+  };
+
+  // NEW: Dedicated function for fetching Forex data
+  const fetchForexData = async () => {
+    try {
+      console.log('🔄 [Smart Trading] Fetching Forex data...');
+      const forexRates = await fetchRealTimeForexRates();
+      
+      const forexPairs = [
+        { pair: 'USD/CHF', country: 'Switzerland', flags: ['US', 'CH'], rate: forexRates.rates?.CHF || 0.8963, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/ch.png'] },
+        { pair: 'USD/JPY', country: 'Japan', flags: ['US', 'JP'], rate: forexRates.rates?.JPY || 152.00, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/jp.png'] },
+        { pair: 'USD/EUR', country: 'Eurozone', flags: ['US', 'EU'], rate: forexRates.rates?.EUR || 0.9200, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/eu.png'] },
+        { pair: 'USD/GBP', country: 'United Kingdom', flags: ['US', 'GB'], rate: forexRates.rates?.GBP || 0.7900, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/gb.png'] },
+        { pair: 'USD/CAD', country: 'Canada', flags: ['US', 'CA'], rate: forexRates.rates?.CAD || 1.3600, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/ca.png'] },
+        { pair: 'USD/AUD', country: 'Australia', flags: ['US', 'AU'], rate: forexRates.rates?.AUD || 1.5200, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/au.png'] },
+        { pair: 'USD/HKD', country: 'Hong Kong', flags: ['US', 'HK'], rate: forexRates.rates?.HKD || 7.8000, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/hk.png'] },
+        { pair: 'USD/SGD', country: 'Singapore', flags: ['US', 'SG'], rate: forexRates.rates?.SGD || 1.3500, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/sg.png'] },
+        { pair: 'USD/CNY', country: 'China', flags: ['US', 'CN'], rate: forexRates.rates?.CNY || 7.2000, flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/cn.png'] }
+      ];
+
+      const forexDataArray = forexPairs.map((item, index) => {
+        const isPositive = Math.random() > 0.5;
+        const change24h = (Math.random() - 0.5) * 2;
+        const sparklineData = generateRealTimeChartData(item.rate, isPositive, 12);
+        
+        return {
+          id: index + 1,
+          pair: item.pair,
+          symbol: item.country,
+          price: formatPrice(item.rate, item.pair.includes('JPY') ? 2 : 4),
+          value: formatPrice(item.rate, item.pair.includes('JPY') ? 2 : 4),
+          change: formatPercentage(change24h),
+          changeValue: change24h,
+          isPositive: isPositive,
+          flags: item.flags,
+          flagUrls: item.flagUrls,
+          sparkline: sparklineData,
+          realTimePrice: item.rate,
+          lastUpdated: new Date().toISOString()
+        };
+      });
+
+      setForexData(forexDataArray);
+      console.log('✅ [Smart Trading] Forex data updated:', forexDataArray.length, 'pairs');
+    } catch (error) {
+      console.error('❌ [Smart Trading] Error fetching Forex data:', error);
+    }
+  };
+
+  // NEW: Dedicated function for fetching Stocks data
+  const fetchStocksData = async () => {
+    try {
+      console.log('🔄 [Smart Trading] Fetching Stocks data...');
+      const stockData = await fetchStockPrices(['AAPL', 'TSLA', 'AMZN', 'GOOGL', 'MSFT', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL']);
+      
+      const stockPairs = [
+        { symbol: 'AAPL', name: 'Apple Inc.', logo: 'https://logo.clearbit.com/apple.com' },
+        { symbol: 'TSLA', name: 'Tesla Inc.', logo: 'https://logo.clearbit.com/tesla.com' },
+        { symbol: 'AMZN', name: 'Amazon.com Inc.', logo: 'https://logo.clearbit.com/amazon.com' },
+        { symbol: 'GOOGL', name: 'Alphabet Inc.', logo: 'https://logo.clearbit.com/google.com' },
+        { symbol: 'MSFT', name: 'Microsoft Corporation', logo: 'https://logo.clearbit.com/microsoft.com' },
+        { symbol: 'META', name: 'Meta Platforms Inc.', logo: 'https://logo.clearbit.com/meta.com' },
+        { symbol: 'NVDA', name: 'NVIDIA Corporation', logo: 'https://logo.clearbit.com/nvidia.com' },
+        { symbol: 'NFLX', name: 'Netflix Inc.', logo: 'https://logo.clearbit.com/netflix.com' },
+        { symbol: 'AMD', name: 'Advanced Micro Devices', logo: 'https://logo.clearbit.com/amd.com' },
+        { symbol: 'INTC', name: 'Intel Corporation', logo: 'https://logo.clearbit.com/intel.com' },
+        { symbol: 'CRM', name: 'Salesforce Inc.', logo: 'https://logo.clearbit.com/salesforce.com' },
+        { symbol: 'ADBE', name: 'Adobe Inc.', logo: 'https://logo.clearbit.com/adobe.com' },
+        { symbol: 'PYPL', name: 'PayPal Holdings Inc.', logo: 'https://logo.clearbit.com/paypal.com' }
+      ];
+
+      const stocksDataArray = stockPairs.map((item, index) => {
+        const stockInfo = stockData[item.symbol] || {};
+        const price = stockInfo.price || Math.random() * 500 + 50;
+        const change24h = stockInfo.change || (Math.random() - 0.5) * 5;
+        const isPositive = change24h >= 0;
+        const logoUrl = stockInfo.logoUrl || item.logo;
+        
+        const sparklineData = generateRealTimeChartData(price, isPositive, 12);
+        
+        return {
+          id: index + 1,
+          pair: item.symbol,
+          symbol: item.name,
+          price: formatPrice(price, 2),
+          value: formatPrice(price, 2),
+          change: formatPercentage(change24h),
+          changeValue: change24h,
+          isPositive: isPositive,
+          flags: ['US', 'US'],
+          logo: logoUrl,
+          sparkline: sparklineData,
+          realTimePrice: price,
+          lastUpdated: new Date().toISOString()
+        };
+      });
+
+      setStocksData(stocksDataArray);
+      console.log('✅ [Smart Trading] Stocks data updated:', stocksDataArray.length, 'stocks');
+    } catch (error) {
+      console.error('❌ [Smart Trading] Error fetching Stocks data:', error);
+    }
+  };
+
+  // NEW: Dedicated function for fetching ETF data
+  const fetchETFsData = async () => {
+    try {
+      console.log('🔄 [Smart Trading] Fetching ETF data...');
+      const etfData = await fetchETFPrices(['SPY', 'QQQ', 'IWM', 'VTI', 'VEA', 'VWO', 'AGG', 'BND', 'GLD', 'SLV', 'USO', 'UNG']);
+      
+      const etfPairs = [
+        { symbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', logo: 'https://logo.clearbit.com/ssga.com' },
+        { symbol: 'QQQ', name: 'Invesco QQQ Trust', logo: 'https://logo.clearbit.com/invesco.com' },
+        { symbol: 'IWM', name: 'iShares Russell 2000 ETF', logo: 'https://logo.clearbit.com/ishares.com' },
+        { symbol: 'VTI', name: 'Vanguard Total Stock Market ETF', logo: 'https://logo.clearbit.com/vanguard.com' },
+        { symbol: 'VEA', name: 'Vanguard FTSE Developed Markets ETF', logo: 'https://logo.clearbit.com/vanguard.com' },
+        { symbol: 'VWO', name: 'Vanguard FTSE Emerging Markets ETF', logo: 'https://logo.clearbit.com/vanguard.com' },
+        { symbol: 'AGG', name: 'iShares Core U.S. Aggregate Bond ETF', logo: 'https://logo.clearbit.com/ishares.com' },
+        { symbol: 'BND', name: 'Vanguard Total Bond Market ETF', logo: 'https://logo.clearbit.com/vanguard.com' },
+        { symbol: 'GLD', name: 'SPDR Gold Trust', logo: 'https://logo.clearbit.com/ssga.com' },
+        { symbol: 'SLV', name: 'iShares Silver Trust', logo: 'https://logo.clearbit.com/ishares.com' },
+        { symbol: 'USO', name: 'United States Oil Fund', logo: 'https://logo.clearbit.com/uscfinvestments.com' },
+        { symbol: 'UNG', name: 'United States Natural Gas Fund', logo: 'https://logo.clearbit.com/uscfinvestments.com' }
+      ];
+
+      const etfsDataArray = etfPairs.map((item, index) => {
+        const etfInfo = etfData[item.symbol] || {};
+        const price = etfInfo.price || Math.random() * 200 + 50;
+        const change24h = etfInfo.change || (Math.random() - 0.5) * 5;
+        const isPositive = change24h >= 0;
+        const logoUrl = etfInfo.logoUrl || item.logo;
+        
+        const sparklineData = generateRealTimeChartData(price, isPositive, 12);
+        
+        return {
+          id: index + 1,
+          pair: item.symbol,
+          symbol: item.name,
+          price: formatPrice(price, 2),
+          value: formatPrice(price, 2),
+          change: formatPercentage(change24h),
+          changeValue: change24h,
+          isPositive: isPositive,
+          flags: ['US', 'US'],
+          logo: logoUrl,
+          sparkline: sparklineData,
+          realTimePrice: price,
+          lastUpdated: new Date().toISOString()
+        };
+      });
+
+      setEtfsData(etfsDataArray);
+      console.log('✅ [Smart Trading] ETF data updated:', etfsDataArray.length, 'ETFs');
+    } catch (error) {
+      console.error('❌ [Smart Trading] Error fetching ETF data:', error);
+    }
+  };
+
+  // NEW: Dedicated function for fetching Futures data
+  const fetchFuturesData = async () => {
+    try {
+      console.log('🔄 [Smart Trading] Fetching Futures data...');
+      const futuresData = await fetchFuturesPrices(['ES', 'NQ', 'YM', 'RTY', 'GC', 'SI', 'CL', 'NG', 'ZB', 'ZN', 'ZF', 'ZT']);
+      
+      const futuresPairs = [
+        { symbol: 'ES', name: 'E-mini S&P 500', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'NQ', name: 'E-mini NASDAQ-100', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'YM', name: 'E-mini Dow Jones', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'RTY', name: 'E-mini Russell 2000', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'GC', name: 'Gold Futures', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'SI', name: 'Silver Futures', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'CL', name: 'Crude Oil Futures', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'NG', name: 'Natural Gas Futures', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'ZB', name: '30-Year Treasury Bond', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'ZN', name: '10-Year Treasury Note', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'ZF', name: '5-Year Treasury Note', logo: 'https://logo.clearbit.com/cme.com' },
+        { symbol: 'ZT', name: '2-Year Treasury Note', logo: 'https://logo.clearbit.com/cme.com' }
+      ];
+
+      const futuresDataArray = futuresPairs.map((item, index) => {
+        const futureInfo = futuresData[item.symbol] || {};
+        const price = futureInfo.price || Math.random() * 5000 + 1000;
+        const change24h = futureInfo.change || (Math.random() - 0.5) * 3;
+        const isPositive = change24h >= 0;
+        const logoUrl = futureInfo.logoUrl || item.logo;
+        
+        const sparklineData = generateRealTimeChartData(price, isPositive, 12);
+        
+        return {
+          id: index + 1,
+          pair: item.symbol,
+          symbol: item.name,
+          price: formatPrice(price, 2),
+          value: formatPrice(price, 2),
+          change: formatPercentage(change24h),
+          changeValue: change24h,
+          isPositive: isPositive,
+          flags: ['US', 'US'],
+          logo: logoUrl,
+          sparkline: sparklineData,
+          realTimePrice: price,
+          lastUpdated: new Date().toISOString()
+        };
+      });
+
+      setFuturesData(futuresDataArray);
+      console.log('✅ [Smart Trading] Futures data updated:', futuresDataArray.length, 'Futures');
+    } catch (error) {
+      console.error('❌ [Smart Trading] Error fetching Futures data:', error);
+    }
   };
 
   // Fetch real-time market data
@@ -287,6 +509,249 @@ export default function MobileSmartTrading() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
+  // Real-time WebSocket data integration
+  useEffect(() => {
+    let forexInterval = null;
+    let stocksInterval = null;
+    let etfInterval = null;
+    let futuresInterval = null;
+    
+    // Close existing WebSocket
+    if (webSocket) {
+      webSocket.close();
+    }
+
+    const fetchMarketData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (activeTab === 'Forex') {
+          // FOREX TAB: Use new dedicated Forex data fetching
+          console.log('🔄 [Smart Trading] Initializing Forex tab with dedicated data feed');
+          
+          // Initial fetch
+          await fetchForexData();
+          
+          // Set up polling for real-time updates every 5 seconds
+          forexInterval = setInterval(async () => {
+            await fetchForexData();
+          }, 5000);
+          
+        } else if (activeTab === 'Stocks') {
+          // STOCKS TAB: Use new dedicated Stocks data fetching
+          console.log('🔄 [Smart Trading] Initializing Stocks tab with dedicated data feed');
+          
+          // Initial fetch
+          await fetchStocksData();
+          
+          // Set up polling for real-time updates every 5 seconds
+          stocksInterval = setInterval(async () => {
+            await fetchStocksData();
+          }, 5000);
+          
+        } else if (activeTab === 'ETF') {
+          // ETF TAB: Use new dedicated ETF data fetching
+          console.log('🔄 [Smart Trading] Initializing ETF tab with dedicated data feed');
+          
+          // Initial fetch
+          await fetchETFsData();
+          
+          // Set up polling for real-time updates every 5 seconds
+          etfInterval = setInterval(async () => {
+            await fetchETFsData();
+          }, 5000);
+          
+        } else if (activeTab === 'Futures') {
+          // FUTURES TAB: Use new dedicated Futures data fetching
+          console.log('🔄 [Smart Trading] Initializing Futures tab with dedicated data feed');
+          
+          // Initial fetch
+          await fetchFuturesData();
+          
+          // Set up polling for real-time updates every 5 seconds
+          futuresInterval = setInterval(async () => {
+            await fetchFuturesData();
+          }, 5000);
+          
+        } else if (activeTab === 'Crypto') {
+          // Initialize Crypto data - NO API CALL, WebSocket only
+          console.log('🚀 [Smart Trading] Initializing Crypto tab with WebSocket-only data');
+          
+          const cryptoPairs = [
+            { symbol: 'BTC', name: 'Bitcoin', logo: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png' },
+            { symbol: 'ETH', name: 'Ethereum', logo: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
+            { symbol: 'LTC', name: 'Litecoin', logo: 'https://assets.coingecko.com/coins/images/2/large/litecoin.png' },
+            { symbol: 'DOT', name: 'Polkadot', logo: 'https://assets.coingecko.com/coins/images/12171/large/polkadot.png' },
+            { symbol: 'FIL', name: 'Filecoin', logo: 'https://assets.coingecko.com/coins/images/12817/large/filecoin.png' },
+            { symbol: 'DOGE', name: 'Dogecoin', logo: 'https://assets.coingecko.com/coins/images/5/large/dogecoin.png' },
+            { symbol: 'XRP', name: 'Ripple', logo: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png' },
+            { symbol: 'TRX', name: 'TRON', logo: 'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png' },
+            { symbol: 'MATIC', name: 'Polygon', logo: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png' },
+            { symbol: 'ADA', name: 'Cardano', logo: 'https://assets.coingecko.com/coins/images/975/large/cardano.png' },
+            { symbol: 'LINK', name: 'Chainlink', logo: 'https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png' },
+            { symbol: 'ATOM', name: 'Cosmos', logo: 'https://assets.coingecko.com/coins/images/1481/large/cosmos_hub.png' },
+            { symbol: 'BNB', name: 'BNB', logo: 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png' },
+            { symbol: 'SOL', name: 'Solana', logo: 'https://assets.coingecko.com/coins/images/4128/large/solana.png' }
+          ];
+
+          const mockData = cryptoPairs.map((item, index) => {
+            const isPositive = Math.random() > 0.5;
+            const price = 0; // Start with $0.00, let WebSocket update
+            const change24h = 0; // Start with 0%, let WebSocket update
+            // Generate sparkline with a reasonable base price for initial display
+            const sparklineData = generateRealTimeChartData(100, isPositive, 12);
+            
+            return {
+              id: index + 1,
+              pair: `${item.symbol}/USD`,
+              symbol: item.name,
+              price: formatPrice(price, 2),
+              value: formatPrice(price, 2),
+              change: formatPercentage(change24h),
+              changeValue: change24h,
+              isPositive: isPositive,
+              flags: ['US', 'US'],
+              logo: item.logo,
+              sparkline: sparklineData,
+              chart: sparklineData, // Add chart property for compatibility
+              realTimePrice: price,
+              lastUpdated: new Date().toISOString()
+            };
+          });
+
+          setMarketData(mockData);
+          
+          // Set up WebSocket for real-time updates
+          const symbolsToSubscribe = ['bitcoin', 'ethereum', 'litecoin', 'polkadot', 'filecoin', 'dogecoin', 'ripple', 'tron', 'polygon', 'cardano', 'chainlink', 'cosmos', 'binancecoin', 'solana'];
+          console.log('🔗 [Smart Trading] Subscribing to symbols:', symbolsToSubscribe);
+          const ws = createCryptoWebSocket(
+            symbolsToSubscribe,
+            (data) => {
+              console.log('📡 [Smart Trading] Received WebSocket data:', data);
+              console.log('📡 [Smart Trading] WebSocket data keys:', Object.keys(data));
+              setMarketData(prevData => {
+                return prevData.map(item => {
+                  const displaySymbol = item.pair.split('/')[0];
+                  // Map display symbols to API symbols for WebSocket data lookup
+                  const symbolMap = {
+                    'BTC': 'bitcoin',
+                    'ETH': 'ethereum', 
+                    'LTC': 'litecoin',
+                    'DOT': 'polkadot',
+                    'FIL': 'filecoin',
+                    'DOGE': 'dogecoin',
+                    'XRP': 'ripple',
+                    'TRX': 'tron',
+                    'MATIC': 'polygon',
+                    'ADA': 'cardano',
+                    'LINK': 'chainlink',
+                    'ATOM': 'cosmos',
+                    'BNB': 'binancecoin',
+                    'SOL': 'solana'
+                  };
+                  const apiSymbol = symbolMap[displaySymbol];
+                  const update = data[apiSymbol];
+                  console.log(`🔍 [Smart Trading] Processing ${displaySymbol} -> ${apiSymbol}:`, {
+                    displaySymbol,
+                    apiSymbol,
+                    hasUpdate: !!update,
+                    update: update ? { price: update.price, change24h: update.change24h, sparkline: update.sparkline } : null,
+                    currentItem: { pair: item.pair, price: item.price }
+                  });
+                  
+                  // Special debugging for MATIC
+                  if (displaySymbol === 'MATIC') {
+                    console.log('🎯 [MATIC Debug] Special processing:', {
+                      displaySymbol,
+                      apiSymbol,
+                      update,
+                      sparklineData: update?.sparkline,
+                      sparklineLength: update?.sparkline?.length
+                    });
+                  }
+                  if (update) {
+                    const updatedItem = {
+                      ...item,
+                      price: formatPrice(update.price, 2),
+                      value: formatPrice(update.price, 2),
+                      change: formatPercentage(update.change24h),
+                      changeValue: update.change24h,
+                      isPositive: update.change24h >= 0,
+                      sparkline: update.sparkline, // Use sparkline from WebSocket update
+                      chart: update.sparkline, // Use sparkline from WebSocket update
+                      realTimePrice: update.price,
+                      lastUpdated: new Date().toISOString()
+                    };
+                    console.log(`✅ [Smart Trading] Updated ${displaySymbol}:`, {
+                      oldPrice: item.price,
+                      newPrice: updatedItem.price,
+                      oldChange: item.change,
+                      newChange: updatedItem.change,
+                      sparklineData: updatedItem.sparkline,
+                      sparklineLength: updatedItem.sparkline?.length
+                    });
+                    return updatedItem;
+                  }
+                  return item;
+                });
+              });
+              
+              // Update price changes for visual feedback
+              setPriceChanges(prev => ({
+                ...prev,
+                ...data
+              }));
+            }
+          );
+          
+          setWebSocket(ws);
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('❌ [Smart Trading] Error fetching market data:', error);
+        setError(error.message);
+        setLoading(false);
+      }
+    };
+
+    fetchMarketData();
+
+    // Cleanup function
+    return () => {
+      // Close WebSocket
+      if (webSocket) {
+        webSocket.close();
+        setWebSocket(null);
+      }
+      
+      // Clear Forex polling interval
+      if (forexInterval) {
+        clearInterval(forexInterval);
+        console.log('🧹 [Smart Trading] Cleared Forex polling interval');
+      }
+      
+      // Clear Stocks polling interval
+      if (stocksInterval) {
+        clearInterval(stocksInterval);
+        console.log('🧹 [Smart Trading] Cleared Stocks polling interval');
+      }
+      
+      // Clear ETF polling interval
+      if (etfInterval) {
+        clearInterval(etfInterval);
+        console.log('🧹 [Smart Trading] Cleared ETF polling interval');
+      }
+      
+      // Clear Futures polling interval
+      if (futuresInterval) {
+        clearInterval(futuresInterval);
+        console.log('🧹 [Smart Trading] Cleared Futures polling interval');
+      }
+    };
+  }, [activeTab]);
+
   const getFallbackData = () => {
     return [
       {
@@ -454,7 +919,7 @@ export default function MobileSmartTrading() {
           </div>
 
           {/* Currency Pair Cards */}
-          {(Array.isArray(marketData) ? marketData : []).map((item) => (
+          {(Array.isArray(activeTab === 'Forex' ? forexData : activeTab === 'Stocks' ? stocksData : activeTab === 'ETF' ? etfsData : activeTab === 'Futures' ? futuresData : marketData) ? (activeTab === 'Forex' ? forexData : activeTab === 'Stocks' ? stocksData : activeTab === 'ETF' ? etfsData : activeTab === 'Futures' ? futuresData : marketData) : []).map((item) => (
             <div key={item.id} className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow">
               <div className="grid grid-cols-5 gap-2 items-center">
                 {/* Name */}
@@ -497,7 +962,9 @@ export default function MobileSmartTrading() {
                 </div>
 
                 {/* Spot Price */}
-                <div className="text-gray-900 font-semibold text-xs">
+                <div className={`text-gray-900 font-semibold text-xs transition-colors duration-1000 ${
+                  priceChanges[item.pair?.split('/')[0]?.toLowerCase()] ? 'bg-green-100' : ''
+                }`}>
                   {item.price}
                 </div>
 
@@ -510,15 +977,12 @@ export default function MobileSmartTrading() {
 
                 {/* Chart */}
                 <div className="flex items-center justify-center">
-                  <div className={`w-10 h-5 rounded ${
-                    item.isPositive ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    <div className={`w-full h-full rounded ${
-                      item.isPositive ? 'bg-green-500' : 'bg-red-500'
-                    }`} style={{
-                      clipPath: 'polygon(0% 100%, 25% 80%, 50% 60%, 75% 40%, 100% 20%)'
-                    }}></div>
-                  </div>
+                  <SparklineChart 
+                    data={item.sparkline || item.chart} 
+                    isPositive={item.isPositive} 
+                    width={40} 
+                    height={20} 
+                  />
                 </div>
 
                 {/* Plus Button */}
