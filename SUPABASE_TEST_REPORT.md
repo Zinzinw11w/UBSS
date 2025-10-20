@@ -117,3 +117,4 @@ Your Supabase integration is fully configured and ready for testing. The React a
 
 **Note**: If you encounter any issues during testing, please share the error messages and I'll help you troubleshoot further.
 
+

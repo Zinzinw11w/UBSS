@@ -47,3 +47,4 @@ grant execute on function public.complete_trading_plan(uuid) to anon, authentica
 
 
 
+

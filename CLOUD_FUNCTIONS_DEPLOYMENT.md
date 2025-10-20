@@ -160,3 +160,4 @@ firebase deploy --only functions
 - Consider adjusting frequency based on usage
 - Monitor Cloud Function usage in Google Cloud Console
 
+

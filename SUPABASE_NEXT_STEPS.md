@@ -79,3 +79,4 @@ Your Supabase integration is now configured and ready for testing. The React app
 
 **Next**: Go to your Supabase dashboard and run the SQL schema to create the database tables! 🎉
 
+

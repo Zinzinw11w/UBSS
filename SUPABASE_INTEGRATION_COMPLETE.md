@@ -212,3 +212,4 @@ erDiagram
 
 **The application is now ready to use Supabase as the backend database!** 🚀
 
+

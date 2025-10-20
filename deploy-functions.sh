@@ -38,3 +38,4 @@ echo "1. Set up Cloud Scheduler to trigger the function every 5 minutes"
 echo "2. Test the function using the manual trigger endpoint"
 echo "3. Monitor function logs: firebase functions:log"
 
+

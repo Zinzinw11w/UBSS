@@ -253,3 +253,4 @@ After completing the setup:
 
 **Next**: Add your Supabase credentials to the `.env` file and create the database tables in your Supabase dashboard.
 
+

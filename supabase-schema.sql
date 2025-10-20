@@ -203,3 +203,4 @@ ON CONFLICT (wallet_address) DO NOTHING;
 -- Success message
 SELECT 'Database schema created successfully!' as message;
 
+
