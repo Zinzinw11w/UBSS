@@ -29,7 +29,7 @@ const Account = () => {
   // Update selectedAccount when wallet address changes
   useEffect(() => {
     if (account) {
-      const lastSixChars = account.slice(-6).toUpperCase();
+      const lastSixChars = account?.slice(-6)?.toUpperCase() || '';
       setSelectedAccount(lastSixChars);
     } else {
       setSelectedAccount('');

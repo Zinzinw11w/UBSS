@@ -91,7 +91,7 @@ export const DatabaseProvider = ({ children }) => {
       setUserDeposits(prev => [deposit, ...prev]);
       return deposit;
     } catch (error) {
-      console.error('Error creating deposit:', error);
+      console.error('DatabaseContext - Error creating deposit:', error);
       throw error;
     }
   };

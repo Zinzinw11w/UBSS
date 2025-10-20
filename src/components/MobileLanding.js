@@ -2,10 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import Footer from './Footer';
 import { useWallet } from '../contexts/WalletContext';
+import { useDatabase } from '../contexts/DatabaseContext';
 import WalletConnectionModal from './WalletConnectionModal';
 
 export default function MobileLanding() {
-  const { isConnected, account, balance, formatAddress } = useWallet();
+  const { isConnected } = useWallet();
+  const { user } = useDatabase();
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -48,7 +50,7 @@ export default function MobileLanding() {
                     <div>
                       <p className="text-gray-200 text-sm font-medium">Balance</p>
                       <p className="text-white text-2xl font-bold">
-                        {isConnected ? `$ ${(balance * 0.99)?.toFixed(6) || '0.000000'}` : 'Connect Wallet'}
+                        {isConnected ? `$${user?.balance?.toFixed(2) || '0.00'}` : 'Connect Wallet'}
                       </p>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -65,7 +67,7 @@ export default function MobileLanding() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                     <span>
-                      {isConnected ? `$${(balance * 0.01)?.toFixed(8) || '0.00000000'} Today's Profit` : 'Connect wallet to see profit'}
+                      {isConnected ? `$${((user?.balance || 0) * 0.01).toFixed(2)} Today's Profit` : 'Connect wallet to see profit'}
                     </span>
                   </div>
                 </div>

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDatabase } from '../contexts/DatabaseContext';
+import { useWallet } from '../contexts/WalletContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { QRCodeSVG } from 'qrcode.react';
 import AccountVerificationModal from './AccountVerificationModal';
 import LiveChat from './LiveChat';
+import MobileTradingPlanDetail from './MobileTradingPlanDetail';
 
 export default function MobileAccount() {
   const [activeOrderTab, setActiveOrderTab] = useState('Options');
@@ -19,12 +21,61 @@ export default function MobileAccount() {
   const [copiedAddress, setCopiedAddress] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [showLiveChat, setShowLiveChat] = useState(false);
+  const [selectedTrade, setSelectedTrade] = useState(null);
+  const [showTradeDetail, setShowTradeDetail] = useState(false);
   
   const navigate = useNavigate();
-  const { createDeposit, createWithdrawal, user } = useDatabase();
+  const { createDeposit, createWithdrawal, user, userTrades } = useDatabase();
+  const { account } = useWallet();
   const { t } = useLanguage();
 
   const orderTabs = ['All orders', 'Options', 'Smart', 'Static Inco'];
+
+  // Filter trades based on active tab
+  const getFilteredTrades = () => {
+    if (!userTrades || userTrades.length === 0) return [];
+    
+    switch (activeOrderTab) {
+      case 'Smart':
+        return userTrades.filter(trade => trade.isSmartTrade === true || trade.type === 'Smart Trading');
+      case 'Options':
+        return userTrades.filter(trade => trade.type === 'Options');
+      case 'Static Inco':
+        return userTrades.filter(trade => trade.type === 'Static Income');
+      case 'All orders':
+      default:
+        return userTrades;
+    }
+  };
+
+  const filteredTrades = getFilteredTrades();
+
+  // Handle trade selection
+  const handleTradeClick = (trade) => {
+    setSelectedTrade(trade);
+    setShowTradeDetail(true);
+  };
+
+  // Handle trade recreation
+  const handleRecreateTrade = () => {
+    if (selectedTrade) {
+      // Navigate to smart trading with pre-filled data
+      navigate('/smart-trading', { 
+        state: { 
+          recreateTrade: selectedTrade,
+          symbol: selectedTrade.symbol || selectedTrade.asset 
+        } 
+      });
+      setShowTradeDetail(false);
+      setSelectedTrade(null);
+    }
+  };
+
+  // Handle close trade detail
+  const handleCloseTradeDetail = () => {
+    setShowTradeDetail(false);
+    setSelectedTrade(null);
+  };
 
   const currencies = [
     { 
@@ -73,25 +124,22 @@ export default function MobileAccount() {
 
   const handleBalanceSubmit = async (e) => {
     e.preventDefault();
+    
     setIsSubmitting(true);
     setError('');
 
+    if (!user) {
+      setError('User not found. Please refresh the page.');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       if (balanceActiveTab === 'deposit') {
-        await createDeposit({
-          amount: parseFloat(amount),
-          currency: selectedCurrency,
-          txHash: txHash,
-          status: 'pending'
-        });
+        await createDeposit(parseFloat(amount), selectedCurrency, txHash);
         alert('Deposit request submitted successfully!');
       } else {
-        await createWithdrawal({
-          amount: parseFloat(amount),
-          currency: selectedCurrency,
-          address: withdrawalAddress,
-          status: 'pending'
-        });
+        await createWithdrawal(parseFloat(amount), selectedCurrency, withdrawalAddress);
         alert('Withdrawal request submitted successfully!');
       }
       
@@ -149,7 +197,9 @@ export default function MobileAccount() {
         {/* Account Selector */}
         <div className="mt-3">
           <button className="w-full bg-white border-2 border-gray-800 rounded-lg px-2 py-1 flex items-center justify-between">
-            <span className="text-gray-900 font-medium text-sm">CeDE8D</span>
+            <span className="text-gray-900 font-medium text-sm">
+              {account ? account.slice(-6).toUpperCase() : 'Connect Wallet'}
+            </span>
             <svg className="w-3 h-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -165,7 +215,9 @@ export default function MobileAccount() {
           <div className="relative z-10">
             {/* Main Balance */}
             <div className="text-center mb-3">
-              <h1 className="text-2xl font-bold text-white">0.00 USD</h1>
+              <h1 className="text-2xl font-bold text-white">
+                {user ? `$${user.balance?.toFixed(2) || '0.00'}` : '0.00 USD'}
+              </h1>
             </div>
 
             {/* Financial Metrics */}
@@ -228,8 +280,121 @@ export default function MobileAccount() {
           </div>
 
           {/* Order Content */}
-          <div className="text-center py-8">
-            <p className="text-gray-600">No more data</p>
+          <div className="space-y-3">
+            {filteredTrades.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">No {activeOrderTab.toLowerCase()} orders found</p>
+              </div>
+            ) : (
+              filteredTrades.map((trade, index) => (
+                <div 
+                  key={trade.id || index} 
+                  className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => handleTradeClick(trade)}
+                >
+                  {/* Trade Header */}
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-sm">
+                        {trade.asset || trade.symbol || 'N/A'} - {trade.tradeType || trade.type || 'Trade'}
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        {trade.createdAt ? new Date(trade.createdAt.toDate ? trade.createdAt.toDate() : trade.createdAt).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        trade.status === 'open' || trade.status === 'Active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : trade.status === 'completed' 
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {trade.status || 'Unknown'}
+                      </span>
+                      {(trade.isSmartTrade || trade.type === 'Smart Trading') && (
+                        <div className="mt-1">
+                          <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                            Smart Trade
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Trade Details */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-gray-600">Amount:</div>
+                      <div className="font-medium">${trade.amount?.toFixed(2) || '0.00'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Entry Price:</div>
+                      <div className="font-medium">${trade.entryPrice?.toFixed(4) || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Current Price:</div>
+                      <div className="font-medium">${trade.currentPrice?.toFixed(4) || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Profit:</div>
+                      <div className={`font-medium ${trade.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ${trade.profit?.toFixed(2) || '0.00'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Smart Trading Specific Details */}
+                  {(trade.isSmartTrade || trade.type === 'Smart Trading') && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        {trade.timeframe && (
+                          <div>
+                            <div className="text-gray-600">Timeframe:</div>
+                            <div className="font-medium">{trade.timeframe}</div>
+                          </div>
+                        )}
+                        {trade.dailyRor && (
+                          <div>
+                            <div className="text-gray-600">Daily ROR:</div>
+                            <div className="font-medium">{trade.dailyRor}</div>
+                          </div>
+                        )}
+                        {trade.todayEarnings && (
+                          <div>
+                            <div className="text-gray-600">Today's Earnings:</div>
+                            <div className="font-medium text-green-600">${trade.todayEarnings.toFixed(2)}</div>
+                          </div>
+                        )}
+                        {trade.totalRevenue && (
+                          <div>
+                            <div className="text-gray-600">Total Revenue:</div>
+                            <div className="font-medium text-green-600">${trade.totalRevenue.toFixed(2)}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Leverage Info */}
+                  {trade.leverage && trade.leverage > 1 && (
+                    <div className="mt-2 text-xs text-gray-600">
+                      Leverage: {trade.leverage}x
+                    </div>
+                  )}
+
+                  {/* Click indicator */}
+                  <div className="mt-3 flex justify-end">
+                    <div className="flex items-center text-xs text-gray-500">
+                      <span>Tap to view details</span>
+                      <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -468,6 +633,17 @@ export default function MobileAccount() {
          isOpen={showLiveChat} 
          onClose={() => setShowLiveChat(false)} 
        />
+
+       {/* Trading Plan Detail Modal */}
+       {showTradeDetail && selectedTrade && (
+         <div className="fixed inset-0 z-50">
+           <MobileTradingPlanDetail
+             trade={selectedTrade}
+             onClose={handleCloseTradeDetail}
+             onRecreate={handleRecreateTrade}
+           />
+         </div>
+       )}
      </div>
-  );
-}
+   );
+ }

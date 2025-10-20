@@ -15,3 +15,4 @@ echo 3. Set Source to "GitHub Actions"
 echo 4. Your site will be available at: https://zinzinw11w.github.io/UBSS/
 echo.
 pause
+

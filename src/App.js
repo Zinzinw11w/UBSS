@@ -4,6 +4,7 @@ import './index.css';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { DatabaseProvider } from './contexts/DatabaseContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Header from './components/Header';
 import DesktopLanding from './components/DesktopLanding';
 import MobileLanding from './components/MobileLanding';
@@ -11,7 +12,6 @@ import MobileMarket from './components/MobileMarket';
 import MobileSmartTrading from './components/MobileSmartTrading';
 import MobileLoan from './components/MobileLoan';
 import MobileAccount from './components/MobileAccount';
-import MobileTradingDetail from './components/MobileTradingDetail';
 import MobileNotifications from './components/MobileNotifications';
 import Footer from './components/Footer';
 import Account from './components/Account';
@@ -19,7 +19,6 @@ import Market from './components/Market';
 import InviteFriends from './components/InviteFriends';
 import HelpCenter from './components/HelpCenter';
 import Loan from './components/Loan';
-import TradingDetail from './components/TradingDetail';
 import SmartTrading from './components/SmartTrading';
 import SignMessageModal from './components/SignMessageModal';
 import AdminPanel from './components/AdminPanel';
@@ -32,6 +31,7 @@ function App() {
     <LanguageProvider>
       <WalletProvider>
         <DatabaseProvider>
+          <NotificationProvider>
           <Router>
           <div className="App">
           <Routes>
@@ -82,20 +82,13 @@ function App() {
               )
             } />
             <Route path="/notifications" element={<MobileNotifications />} />
-                <Route path="/trading/:category/*" element={
-                  isMobile ? <MobileTradingDetail /> : (
-                    <>
-                      <Header />
-                      <TradingDetail />
-                    </>
-                  )
-                } />
                         </Routes>
                         <SignMessageModal />
                         <AlertSystem />
                       </div>
                     </Router>
-                  </DatabaseProvider>
+                  </NotificationProvider>
+                </DatabaseProvider>
                 </WalletProvider>
               </LanguageProvider>
             );

@@ -86,3 +86,4 @@ After deployment, test these URLs:
 - ✅ `https://zinzinw11w.github.io/UBSS/#/account` - Should show account page
 
 The blank page issue is now completely resolved! 🎉
+

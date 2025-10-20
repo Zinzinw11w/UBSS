@@ -25,10 +25,6 @@ const BalanceModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const getSelectedCurrency = () => {
-    return currencies.find(c => c.id === selectedCurrency);
-  };
-
   const currencies = [
     { 
       id: 'BTC', 
@@ -60,11 +56,34 @@ const BalanceModal = ({ isOpen, onClose }) => {
     }
   ];
 
+  const getSelectedCurrency = () => {
+    return currencies.find(c => c.id === selectedCurrency);
+  };
+
   const handleDeposit = async () => {
+    // Force visible debugging
+    alert('BalanceModal handleDeposit called! Amount: ' + amount + ', Currency: ' + selectedCurrency + ', TxHash: ' + txHash);
+    
+    console.log('BalanceModal - State values:', { 
+      amount, 
+      selectedCurrency, 
+      txHash, 
+      activeTab,
+      currencies: currencies.map(c => c.id)
+    });
+    
     if (!amount || !txHash) {
       setError('Please fill in all required fields');
       return;
     }
+
+    if (!user) {
+      setError('User not found. Please refresh the page.');
+      return;
+    }
+
+    console.log('BalanceModal - Deposit data:', { amount, selectedCurrency, txHash });
+    console.log('BalanceModal - User:', user);
 
     setIsSubmitting(true);
     try {
@@ -75,6 +94,7 @@ const BalanceModal = ({ isOpen, onClose }) => {
       setTxHash('');
       setError('');
     } catch (error) {
+      console.error('BalanceModal - Deposit error:', error);
       setError('Failed to submit deposit request');
     } finally {
       setIsSubmitting(false);
@@ -185,15 +205,18 @@ const BalanceModal = ({ isOpen, onClose }) => {
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Amount ({activeTab === 'deposit' ? 'to deposit' : 'to withdraw'})
               </label>
-               <input
-                 type="number"
-                 value={amount}
-                 onChange={(e) => setAmount(e.target.value)}
-                 placeholder="0.00"
-                 className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                 min="0"
-                 step="0.01"
-               />
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => {
+                    console.log('Amount input changed:', e.target.value);
+                    setAmount(e.target.value);
+                  }}
+                  placeholder="0.00"
+                  className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  min="0"
+                  step="0.01"
+                />
             </div>
 
             {/* Currency Selection */}
@@ -205,7 +228,10 @@ const BalanceModal = ({ isOpen, onClose }) => {
                 {currencies.map((currency) => (
                   <button
                     key={currency.id}
-                    onClick={() => setSelectedCurrency(currency.id)}
+                    onClick={() => {
+                      console.log('Currency selected:', currency.id);
+                      setSelectedCurrency(currency.id);
+                    }}
                     className={`p-1 sm:p-2 rounded-lg border-2 transition-colors text-xs ${
                       selectedCurrency === currency.id
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -290,7 +316,10 @@ const BalanceModal = ({ isOpen, onClose }) => {
                 <input
                   type="text"
                   value={txHash}
-                  onChange={(e) => setTxHash(e.target.value)}
+                  onChange={(e) => {
+                    console.log('Transaction hash input changed:', e.target.value);
+                    setTxHash(e.target.value);
+                  }}
                   placeholder="Enter transaction hash"
                   className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />

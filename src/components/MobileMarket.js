@@ -863,12 +863,10 @@ export default function MobileMarket() {
             {/* Featured Currency Pairs */}
             <div className="grid grid-cols-3 gap-1 mb-2">
               {(Array.isArray(activeTab === 'Forex' ? forexData : activeTab === 'Stocks' ? stocksData : activeTab === 'ETF' ? etfsData : activeTab === 'Futures' ? futuresData : marketData) ? (activeTab === 'Forex' ? forexData : activeTab === 'Stocks' ? stocksData : activeTab === 'ETF' ? etfsData : activeTab === 'Futures' ? futuresData : marketData).slice(0, 3) : []).map((item) => (
-                <Link
+                <div
                   key={item.id}
-                  to={`/trading/${activeTab.toLowerCase()}/${item.pair}`}
-                  className="block"
+                  className="bg-gray-100 rounded-md p-3 border border-gray-200 hover:bg-gray-200 transition-colors h-28"
                 >
-                  <div className="bg-gray-100 rounded-md p-3 border border-gray-200 hover:bg-gray-200 transition-colors cursor-pointer h-28">
                     {/* New Clean Mobile Layout */}
                     <div className="flex flex-col gap-2 h-full">
                       {/* Top Section: Symbol and Name */}
@@ -960,7 +958,6 @@ export default function MobileMarket() {
                       </div>
                     </div>
                   </div>
-                </Link>
               ))}
             </div>
 
@@ -976,12 +973,10 @@ export default function MobileMarket() {
 
               {/* Currency Pair Cards */}
               {(Array.isArray(activeTab === 'Forex' ? forexData : activeTab === 'Stocks' ? stocksData : activeTab === 'ETF' ? etfsData : activeTab === 'Futures' ? futuresData : marketData) ? (activeTab === 'Forex' ? forexData : activeTab === 'Stocks' ? stocksData : activeTab === 'ETF' ? etfsData : activeTab === 'Futures' ? futuresData : marketData) : []).map((item) => (
-                <Link
+                <div
                   key={item.id}
-                  to={`/trading/${activeTab.toLowerCase()}/${item.pair}`}
-                  className="block"
+                  className="bg-white rounded-md border border-gray-200 p-1.5 hover:bg-gray-50 transition-colors"
                 >
-                  <div className="bg-white rounded-md border border-gray-200 p-1.5 hover:bg-gray-50 transition-colors cursor-pointer">
                     <div className="grid grid-cols-4 gap-2 items-center">
                       {/* Name */}
                       <div className="flex items-center space-x-1">
@@ -1048,7 +1043,6 @@ export default function MobileMarket() {
                       </div>
                     </div>
                   </div>
-                </Link>
               ))}
         </div>
       </main>

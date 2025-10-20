@@ -1515,16 +1515,12 @@ const Market = () => {
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 overflow-x-auto">
             {featuredPairs.map((pair, index) => (
-              <Link
-                key={pair.id}
-                to={`/trading/${activeTab.toLowerCase()}/${pair.pair}`}
-                className="block"
-              >
                 <motion.div
+                key={pair.id}
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.4, delay: 0.3 + index * 0.1 }}
-                  className={`rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:shadow-lg transition-all duration-300 min-h-[180px] sm:min-h-[200px] cursor-pointer ${
+                className={`rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:shadow-lg transition-all duration-300 min-h-[180px] sm:min-h-[200px] ${
                     index === 0 
                       ? 'bg-gradient-to-br from-gray-800 to-gray-900 text-white border-2 border-gray-700' 
                       : 'bg-white border-2 border-gray-200 hover:border-gray-300'
@@ -1629,7 +1625,6 @@ const Market = () => {
                 </div>
                 </div>
                 </motion.div>
-              </Link>
             ))}
           </div>
           
@@ -1689,16 +1684,12 @@ const Market = () => {
               </div>
             ) : (
               (activeTab === 'Forex' ? forexData : activeTab === 'Stocks' ? stocksData : activeTab === 'ETF' ? etfsData : activeTab === 'Futures' ? futuresData : marketData).map((item, index) => (
-                <Link
-                  key={item.id}
-                  to={`/trading/${activeTab.toLowerCase()}/${item.pair}`}
-                  className="block"
-                >
                   <motion.div
+                  key={item.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.4, delay: 0.5 + index * 0.05 }}
-                    className="px-4 sm:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+                  className="px-4 sm:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors duration-200"
                   >
                     {/* Mobile Layout */}
                     <div className="sm:hidden">
@@ -1860,7 +1851,6 @@ const Market = () => {
                       }`}>{item.value}</div>
                     </div>
                   </motion.div>
-                </Link>
               ))
             )}
           </div>

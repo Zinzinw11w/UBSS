@@ -44,6 +44,9 @@ const DepositModal = ({ isOpen, onClose }) => {
   const selectedCurrencyData = currencies.find(c => c.symbol === selectedCurrency);
 
   const handleDeposit = async () => {
+    // Force visible debugging
+    alert('DepositModal handleDeposit called! Amount: ' + amount + ', Currency: ' + selectedCurrency + ', TxHash: ' + txHash);
+    
     if (!amount || parseFloat(amount) < parseFloat(selectedCurrencyData.minDeposit)) {
       setError(`Minimum deposit amount is ${selectedCurrencyData.minDeposit} ${selectedCurrency}`);
       return;

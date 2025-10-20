@@ -66,3 +66,4 @@ In your GitHub repository:
 - All assets loading correctly
 
 The site will be available at: `https://zinzinw11w.github.io/UBSS/`
+

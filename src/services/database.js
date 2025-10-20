@@ -10,9 +10,10 @@ import {
   where, 
   orderBy, 
   limit, 
-  onSnapshot,
-  serverTimestamp,
-  increment
+  onSnapshot, 
+  serverTimestamp, 
+  increment,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import axios from 'axios';
@@ -98,11 +99,16 @@ export const updateUserBalance = async (userId, amount, type = 'deposit') => {
 // Deposit Management
 export const createDeposit = async (userId, amount, currency, txHash) => {
   try {
+    // Validate txHash before proceeding
+    if (!txHash || txHash.trim() === '') {
+      throw new Error('Transaction hash is required');
+    }
+    
     const depositData = {
       userId,
       amount: parseFloat(amount),
-      currency: currency.toUpperCase(),
-      txHash,
+      currency: currency?.toUpperCase() || 'USD',
+      txHash: txHash.trim(), // Ensure it's trimmed and not undefined
       status: 'pending',
       createdAt: serverTimestamp(),
       approvedAt: null,
@@ -120,24 +126,34 @@ export const createDeposit = async (userId, amount, currency, txHash) => {
 export const approveDeposit = async (depositId, adminId) => {
   try {
     const depositRef = doc(db, 'deposits', depositId);
-    const depositDoc = await getDoc(depositRef);
     
-    if (!depositDoc.exists()) {
-      throw new Error('Deposit not found');
-    }
+    // Use Firestore transaction to ensure atomicity
+    await runTransaction(db, async (transaction) => {
+      const depositDoc = await transaction.get(depositRef);
+      
+      if (!depositDoc.exists()) {
+        throw new Error('Deposit not found');
+      }
 
-    const depositData = depositDoc.data();
-    
-    // Update deposit status
-    await updateDoc(depositRef, {
-      status: 'approved',
-      approvedAt: serverTimestamp(),
-      approvedBy: adminId
+      const depositData = depositDoc.data();
+      const userRef = doc(db, 'users', depositData.userId);
+      
+      // Update 1: Change deposit status from 'pending' to 'approved'
+      transaction.update(depositRef, {
+        status: 'approved',
+        approvedAt: serverTimestamp(),
+        approvedBy: adminId
+      });
+
+      // Update 2: Increment user's balance by deposit amount
+      transaction.update(userRef, {
+        balance: increment(depositData.amount),
+        totalDeposits: increment(depositData.amount),
+        lastUpdated: serverTimestamp()
+      });
     });
 
-    // Update user balance
-    await updateUserBalance(depositData.userId, depositData.amount, 'deposit');
-
+    console.log('Deposit approved successfully with transaction');
     return true;
   } catch (error) {
     console.error('Error approving deposit:', error);
@@ -178,7 +194,7 @@ export const createWithdrawal = async (userId, amount, currency, walletAddress) 
     const withdrawalData = {
       userId,
       amount: parseFloat(amount),
-      currency: currency.toUpperCase(),
+      currency: currency?.toUpperCase() || 'USD',
       walletAddress,
       status: 'pending',
       createdAt: serverTimestamp(),
@@ -257,7 +273,7 @@ export const createTrade = async (userId, asset, amount, tradeType, leverage = 1
     
     const tradeData = {
       userId,
-      asset: asset.toUpperCase(),
+      asset: asset?.toUpperCase() || 'BTC',
       amount: parseFloat(amount),
       tradeType, // 'buy' or 'sell'
       leverage: parseFloat(leverage),
@@ -537,16 +553,16 @@ export const getRealTimePrice = async (asset) => {
   try {
     let price = 0;
     
-    if (asset.toUpperCase().includes('BTC')) {
+    if (asset?.toUpperCase().includes('BTC')) {
       const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
       price = response.data.bitcoin.usd;
-    } else if (asset.toUpperCase().includes('ETH')) {
+    } else if (asset?.toUpperCase().includes('ETH')) {
       const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
       price = response.data.ethereum.usd;
-    } else if (asset.toUpperCase().includes('EUR')) {
+    } else if (asset?.toUpperCase().includes('EUR')) {
       const response = await axios.get('https://api.exchangerate-api.com/v4/latest/USD');
       price = 1 / response.data.rates.EUR;
-    } else if (asset.toUpperCase().includes('GBP')) {
+    } else if (asset?.toUpperCase().includes('GBP')) {
       const response = await axios.get('https://api.exchangerate-api.com/v4/latest/USD');
       price = 1 / response.data.rates.GBP;
     } else {

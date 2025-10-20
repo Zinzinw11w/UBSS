@@ -1044,6 +1044,7 @@ export default function MobileSmartTrading() {
           isOpen={showCreatePlan}
           onClose={() => setShowCreatePlan(false)}
           symbol={selectedSymbol}
+          availableBalance={user?.balance || 0}
           onPlanCreated={handleConfirmPlan}
         />
       )}
