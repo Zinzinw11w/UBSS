@@ -1,4 +1,6 @@
 import React from 'react';
+import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
 import Footer from './Footer';
 import { useWallet } from '../contexts/WalletContext';
@@ -8,6 +10,34 @@ import WalletConnectionModal from './WalletConnectionModal';
 export default function MobileLanding() {
   const { isConnected } = useWallet();
   const { user } = useDatabase();
+  const [todayProfit, setTodayProfit] = React.useState(0);
+
+  // Real-time listener for today's profit (last 24 hours completed plans)
+  React.useEffect(() => {
+    if (!user || !user.id) return;
+
+    const twentyFourHoursAgo = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+    const plansRef = collection(db, 'trading_plans');
+    const q = query(
+      plansRef,
+      where('userId', '==', user.id),
+      where('status', '==', 'completed'),
+      where('completedAt', '>=', twentyFourHoursAgo)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const total = snapshot.docs.reduce((sum, doc) => {
+        const data = doc.data() || {};
+        const profit = typeof data.profitAmount === 'number' ? data.profitAmount : 0;
+        return sum + profit;
+      }, 0);
+      setTodayProfit(total);
+    }, (error) => {
+      console.error('Error subscribing to today\'s profit:', error);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id]);
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -67,7 +97,7 @@ export default function MobileLanding() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                     <span>
-                      {isConnected ? `$${((user?.balance || 0) * 0.01).toFixed(2)} Today's Profit` : 'Connect wallet to see profit'}
+                      {isConnected ? `$${todayProfit.toFixed(2)} Today's Profit` : 'Connect wallet to see profit'}
                     </span>
                   </div>
                 </div>

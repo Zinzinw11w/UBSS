@@ -18,6 +18,7 @@ export const DatabaseProvider = ({ children }) => {
   const { isConnected, account, walletType } = useWallet();
   const [user, setUser] = useState(null);
   const [userTrades, setUserTrades] = useState([]);
+  const [userTradingPlans, setUserTradingPlans] = useState([]);
   const [userDeposits, setUserDeposits] = useState([]);
   const [userWithdrawals, setUserWithdrawals] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
@@ -54,6 +55,7 @@ export const DatabaseProvider = ({ children }) => {
       } else {
         setUser(null);
         setUserTrades([]);
+        setUserTradingPlans([]);
         setUserDeposits([]);
         setUserWithdrawals([]);
         setChatMessages([]);
@@ -171,6 +173,70 @@ export const DatabaseProvider = ({ children }) => {
     }
   };
 
+  // New trading plan creation function
+  const createTradingPlan = async (planData) => {
+    if (!user || !account) throw new Error('User not found or wallet not connected');
+    
+    try {
+      console.log('Creating trading plan with validation:', planData);
+      
+      // Route based on backend flag
+      const result = database.USE_SUPABASE_PLANS
+        ? await database.createTradingPlanSupabase(account, planData, user?.balance)
+        : await database.createTradingPlan(account, planData);
+      
+      if (result.success) {
+        // Trading plan created successfully
+        // Ensure plans list updates; some screens read from userTradingPlans
+        setUserTradingPlans(prev => [result.planData, ...prev]);
+        
+        // Update user balance in context
+        setUser(prev => ({
+          ...prev,
+          balance: result.newBalance
+        }));
+        
+        // Show success alert
+        showAlert('success', 
+          `Smart Trading Plan created successfully! Plan #${result.planId.slice(-8)} is now active.`,
+          5000
+        );
+        
+        return result.planData;
+      } else if (result.error === 'RATE_LIMIT_EXCEEDED') {
+        // Rate limit exceeded
+        showAlert('warning', result.message, 5000);
+        throw new Error('RATE_LIMIT_EXCEEDED');
+      } else {
+        // Insufficient funds
+        const shortfall = result.shortfall;
+        showAlert('error', 
+          `Insufficient funds! You need ${shortfall.toFixed(2)} USD more to create this plan.`,
+          8000,
+          {
+            text: 'Deposit Funds',
+            onClick: () => {
+              // This will be handled by the component that calls this function
+              window.dispatchEvent(new CustomEvent('openDepositModal'));
+            }
+          }
+        );
+        
+        throw new Error('INSUFFICIENT_FUNDS');
+      }
+    } catch (error) {
+      console.error('Error creating trading plan:', error);
+      
+      if (error.message === 'INSUFFICIENT_FUNDS') {
+        throw error; // Re-throw to let component handle it
+      }
+      
+      // Other errors
+      showAlert('error', 'Failed to create trading plan. Please try again.', 5000);
+      throw error;
+    }
+  };
+
   const createSmartTrade = async (asset, amount, tradeType, leverage = 1) => {
     if (!user) throw new Error('User not found');
     
@@ -248,6 +314,7 @@ export const DatabaseProvider = ({ children }) => {
 
     let unsubscribeBalance = null;
     let unsubscribeTrades = null;
+    let unsubscribeTradingPlans = null;
     let unsubscribeChat = null;
 
     try {
@@ -263,6 +330,42 @@ export const DatabaseProvider = ({ children }) => {
         const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setUserTrades(trades);
       });
+
+      if (database.USE_SUPABASE_PLANS) {
+        // Supabase realtime
+        unsubscribeTradingPlans = database.supabaseSubscribeToUserTradingPlans(user.id, (list) => {
+          const plans = (list || []).map(row => ({
+            id: row.id,
+            userId: row.user_id,
+            investmentAmount: row.investment_amount,
+            assetSymbol: row.asset_symbol,
+            status: row.status,
+            durationHours: row.duration_hours,
+            yieldRange: [row.yield_range_min, row.yield_range_max],
+            createdAt: row.created_at,
+            completedAt: row.completed_at,
+            profitAmount: row.profit_amount,
+            totalReturn: row.total_return
+          }));
+          setUserTradingPlans(plans);
+        });
+      } else {
+        // Firestore realtime
+        unsubscribeTradingPlans = database.subscribeToUserTradingPlans(user.id, (snapshot) => {
+          const plans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setUserTradingPlans(plans);
+          
+          plans.forEach(plan => {
+            if (plan.status === 'completed' && plan.completedAt) {
+              const totalReturn = plan.totalReturn || (plan.investmentAmount + (plan.profitAmount || 0));
+              showAlert('success', 
+                `🎉 Your trading plan for ${plan.assetSymbol} has completed successfully! A total of $${totalReturn.toFixed(2)} has been added to your balance.`,
+                8000
+              );
+            }
+          });
+        });
+      }
 
       // Subscribe to chat messages
       unsubscribeChat = chat.subscribeToChatMessages(user.id, (snapshot) => {
@@ -290,6 +393,7 @@ export const DatabaseProvider = ({ children }) => {
     return () => {
       if (unsubscribeBalance) unsubscribeBalance();
       if (unsubscribeTrades) unsubscribeTrades();
+      if (unsubscribeTradingPlans) unsubscribeTradingPlans();
       if (unsubscribeChat) unsubscribeChat();
     };
   }, [user?.id]); // Only depend on user.id to avoid unnecessary re-subscriptions
@@ -297,6 +401,7 @@ export const DatabaseProvider = ({ children }) => {
   const value = {
     user,
     userTrades,
+    userTradingPlans,
     userDeposits,
     userWithdrawals,
     chatMessages,
@@ -304,6 +409,7 @@ export const DatabaseProvider = ({ children }) => {
     createDeposit,
     createWithdrawal,
     createTrade,
+    createTradingPlan,
     createSmartTrade,
     closeTrade,
     sendMessage,

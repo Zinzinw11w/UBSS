@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read and write their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Users can read and write their own trades
+    match /trades/{tradeId} {
+      allow read, write: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         resource.data.walletAddress == request.auth.uid);
+    }
+    
+    // Users can read and write their own trading plans
+    match /trading_plans/{planId} {
+      allow read, write: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         resource.data.walletAddress == request.auth.uid);
+    }
+    
+    // Users can read and write their own deposits
+    match /deposits/{depositId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // Users can read and write their own withdrawals
+    match /withdrawals/{withdrawalId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // Users can read and write their own chat messages
+    match /chat_messages/{messageId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // Admin access (you may want to add admin authentication)
+    match /{document=**} {
+      allow read, write: if false; // Deny all other access by default
+    }
+  }
+}
+
