@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import CountryFlag from './CountryFlags';
 import { 
   fetchRealTimeForexRates,
-  fetchCryptoPrices,
   fetchStockPrices,
   fetchETFPrices,
   fetchFuturesPrices,
@@ -11,7 +10,6 @@ import {
   formatPercentage,
   generateRealTimeChartData,
   createCryptoWebSocket,
-  createForexWebSocket,
   createStockWebSocket,
   createETFWebSocket,
   createFuturesWebSocket

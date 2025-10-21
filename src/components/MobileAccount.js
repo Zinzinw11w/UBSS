@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDatabase } from '../contexts/DatabaseContext';
 import { useWallet } from '../contexts/WalletContext';
-import { useLanguage } from '../contexts/LanguageContext';
 import { QRCodeSVG } from 'qrcode.react';
 import AccountVerificationModal from './AccountVerificationModal';
 import LiveChat from './LiveChat';
@@ -25,48 +24,25 @@ export default function MobileAccount() {
   const [showTradeDetail, setShowTradeDetail] = useState(false);
   
   const navigate = useNavigate();
-  const { createDeposit, createWithdrawal, user, userTrades, userTradingPlans } = useDatabase();
+  const { createDeposit, createWithdrawal, user, userTrades } = useDatabase();
   const { account } = useWallet();
-  const { t } = useLanguage();
 
   const orderTabs = ['All orders', 'Options', 'Smart', 'Static Inco'];
 
-  // Normalize trading plans into trade-like entries for unified rendering
-  const mapPlanToTradeLike = (plan) => ({
-    id: plan.id,
-    asset: plan.assetSymbol,
-    symbol: plan.assetSymbol,
-    amount: plan.investmentAmount,
-    tradeType: 'Plan',
-    type: 'Smart Trading',
-    status: plan.status === 'active' ? 'Active' : plan.status,
-    timeframe: plan.timeframe || (plan.durationHours ? `${Math.round(plan.durationHours/24)} Days` : undefined),
-    createdAt: plan.createdAt,
-    profit: plan.profitAmount || 0,
-    entryPrice: plan.openPrice || undefined,
-    currentPrice: undefined
-  });
-
-  // Filter trades/plans based on active tab
+  // Filter trades based on active tab
   const getFilteredTrades = () => {
-    const trades = userTrades || [];
-    const plansActive = (userTradingPlans || [])
-      .filter(p => (p.status || '').toLowerCase() === 'active')
-      .map(mapPlanToTradeLike);
-
+    if (!userTrades || userTrades.length === 0) return [];
+    
     switch (activeOrderTab) {
       case 'Smart':
-        return [
-          ...trades.filter(trade => trade.isSmartTrade === true || trade.type === 'Smart Trading'),
-          ...plansActive
-        ];
+        return userTrades.filter(trade => trade.isSmartTrade === true || trade.type === 'Smart Trading');
       case 'Options':
-        return trades.filter(trade => trade.type === 'Options');
+        return userTrades.filter(trade => trade.type === 'Options');
       case 'Static Inco':
-        return trades.filter(trade => trade.type === 'Static Income');
+        return userTrades.filter(trade => trade.type === 'Static Income');
       case 'All orders':
       default:
-        return [...trades, ...plansActive];
+        return userTrades;
     }
   };
 

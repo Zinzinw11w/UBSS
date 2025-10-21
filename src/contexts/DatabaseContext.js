@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useWallet } from './WalletContext';
 import * as database from '../services/database';
 import * as chat from '../services/chat';
+import backgroundService from '../services/backgroundService';
 import { showAlert } from '../components/AlertSystem';
 
 const DatabaseContext = createContext();
@@ -18,69 +19,186 @@ export const DatabaseProvider = ({ children }) => {
   const { isConnected, account, walletType } = useWallet();
   const [user, setUser] = useState(null);
   const [userTrades, setUserTrades] = useState([]);
-  const [userTradingPlans, setUserTradingPlans] = useState([]);
   const [userDeposits, setUserDeposits] = useState([]);
   const [userWithdrawals, setUserWithdrawals] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [todaysProfit, setTodaysProfit] = useState(0);
+
+  // Start background service on mount
+  useEffect(() => {
+    backgroundService.start();
+    
+    return () => {
+      backgroundService.stop();
+    };
+  }, []);
 
   // Initialize user when wallet connects
   useEffect(() => {
     const initializeUser = async () => {
+      console.log('🚀 Initializing user...', { isConnected, account, walletType });
+      
       if (isConnected && account) {
         setIsLoading(true);
         try {
-          console.log('Initializing user for wallet:', account);
+          console.log('🔍 Checking for existing user with wallet:', account);
           // Check if user exists
           let userData = await database.getUserByWallet(account);
-          console.log('Existing user data:', userData);
+          console.log('👤 Existing user data:', userData);
           
           if (!userData) {
             // Create new user
-            console.log('Creating new user...');
+            console.log('➕ Creating new user...');
             userData = await database.createUser(account, walletType);
-            console.log('New user created:', userData);
+            console.log('✅ New user created:', userData);
           }
           
           setUser(userData);
+          console.log('👤 User set in context:', userData);
           
           // Load user data
-          await loadUserData(userData.id);
+          console.log('📥 Loading user data...');
+          await loadUserData(userData.id, userData.walletAddress);
+          
+          // Set up real-time subscriptions after data is loaded
+          console.log('🔧 Setting up subscriptions...');
+          setupSubscriptions(userData);
           
         } catch (error) {
-          console.error('Error initializing user:', error);
+          console.error('❌ Error initializing user:', error);
         } finally {
           setIsLoading(false);
         }
       } else {
+        console.log('🔌 Wallet not connected, clearing user data');
         setUser(null);
         setUserTrades([]);
-        setUserTradingPlans([]);
         setUserDeposits([]);
         setUserWithdrawals([]);
         setChatMessages([]);
+        setTodaysProfit(0);
       }
     };
 
     initializeUser();
   }, [isConnected, account, walletType]);
 
+  // Calculate today's profit
+  const calculateTodaysProfit = (trades) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todaysTrades = trades.filter(trade => {
+      const tradeDate = trade.completedAt?.toDate ? trade.completedAt.toDate() : new Date(trade.completedAt || 0);
+      return tradeDate >= today && trade.status === 'completed';
+    });
+    
+    const totalProfit = todaysTrades.reduce((sum, trade) => {
+      return sum + (trade.profit || 0);
+    }, 0);
+    
+    return totalProfit;
+  };
+
+  // Set up real-time subscriptions
+  const setupSubscriptions = (userData) => {
+    console.log('🔧 Setting up subscriptions for user:', userData);
+    
+    if (!userData || !userData.id) {
+      console.log('❌ No user data or user ID, skipping subscriptions');
+      return;
+    }
+
+    let unsubscribeBalance = null;
+    let unsubscribeTrades = null;
+    let unsubscribeChat = null;
+
+    try {
+      console.log('📡 Setting up balance subscription...');
+      // Subscribe to user balance changes
+      unsubscribeBalance = database.subscribeToUserBalance(userData.id, (doc) => {
+        console.log('💰 Balance update received:', doc.exists() ? doc.data() : 'No data');
+        if (doc.exists()) {
+          setUser(prev => ({ ...prev, ...doc.data() }));
+        }
+      });
+
+      console.log('📡 Setting up trades subscription...');
+      // Subscribe to user trades
+      unsubscribeTrades = database.subscribeToUserTrades(userData.id, userData.walletAddress, (snapshot) => {
+        console.log('📊 Trades subscription update:', {
+          userId: userData.id,
+          walletAddress: userData.walletAddress,
+          docsCount: snapshot.docs.length,
+          trades: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        });
+        
+        const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setUserTrades(trades);
+        
+        // Recalculate today's profit when trades change
+        const profit = calculateTodaysProfit(trades);
+        setTodaysProfit(profit);
+      });
+
+      console.log('📡 Setting up chat subscription...');
+      // Subscribe to chat messages
+      unsubscribeChat = chat.subscribeToChatMessages(userData.id, (snapshot) => {
+        console.log('=== CHAT SUBSCRIPTION UPDATE ===');
+        console.log('User ID:', userData.id);
+        console.log('Snapshot docs count:', snapshot.docs.length);
+        console.log('Snapshot docs:', snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        
+        const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setChatMessages(messages);
+      });
+
+      console.log('✅ All subscriptions set up successfully');
+
+      // Store unsubscribe functions for cleanup
+      return () => {
+        if (unsubscribeBalance) unsubscribeBalance();
+        if (unsubscribeTrades) unsubscribeTrades();
+        if (unsubscribeChat) unsubscribeChat();
+      };
+    } catch (error) {
+      console.error('❌ Error setting up subscriptions:', error);
+    }
+  };
+
   // Load user data
-  const loadUserData = async (userId) => {
+  const loadUserData = async (userId, walletAddress) => {
+    console.log('📥 Loading user data for:', { userId, walletAddress });
+    
     try {
       const [trades, deposits, withdrawals, messages] = await Promise.all([
-        database.getUserTrades(userId),
+        database.getUserTrades(userId, walletAddress),
         database.getUserDeposits(userId),
         database.getUserWithdrawals(userId),
         chat.getChatHistory(userId)
       ]);
 
+      console.log('📊 Loaded data:', {
+        trades: trades.length,
+        deposits: deposits.length,
+        withdrawals: withdrawals.length,
+        messages: messages.length,
+        tradesData: trades
+      });
+
       setUserTrades(trades);
       setUserDeposits(deposits);
       setUserWithdrawals(withdrawals);
       setChatMessages(messages);
+      
+      // Calculate today's profit
+      const profit = calculateTodaysProfit(trades);
+      setTodaysProfit(profit);
+      
+      console.log('✅ User data loaded successfully');
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('❌ Error loading user data:', error);
     }
   };
 
@@ -173,70 +291,6 @@ export const DatabaseProvider = ({ children }) => {
     }
   };
 
-  // New trading plan creation function
-  const createTradingPlan = async (planData) => {
-    if (!user || !account) throw new Error('User not found or wallet not connected');
-    
-    try {
-      console.log('Creating trading plan with validation:', planData);
-      
-      // Route based on backend flag
-      const result = database.USE_SUPABASE_PLANS
-        ? await database.createTradingPlanSupabase(account, planData, user?.balance)
-        : await database.createTradingPlan(account, planData);
-      
-      if (result.success) {
-        // Trading plan created successfully
-        // Ensure plans list updates; some screens read from userTradingPlans
-        setUserTradingPlans(prev => [result.planData, ...prev]);
-        
-        // Update user balance in context
-        setUser(prev => ({
-          ...prev,
-          balance: result.newBalance
-        }));
-        
-        // Show success alert
-        showAlert('success', 
-          `Smart Trading Plan created successfully! Plan #${result.planId.slice(-8)} is now active.`,
-          5000
-        );
-        
-        return result.planData;
-      } else if (result.error === 'RATE_LIMIT_EXCEEDED') {
-        // Rate limit exceeded
-        showAlert('warning', result.message, 5000);
-        throw new Error('RATE_LIMIT_EXCEEDED');
-      } else {
-        // Insufficient funds
-        const shortfall = result.shortfall;
-        showAlert('error', 
-          `Insufficient funds! You need ${shortfall.toFixed(2)} USD more to create this plan.`,
-          8000,
-          {
-            text: 'Deposit Funds',
-            onClick: () => {
-              // This will be handled by the component that calls this function
-              window.dispatchEvent(new CustomEvent('openDepositModal'));
-            }
-          }
-        );
-        
-        throw new Error('INSUFFICIENT_FUNDS');
-      }
-    } catch (error) {
-      console.error('Error creating trading plan:', error);
-      
-      if (error.message === 'INSUFFICIENT_FUNDS') {
-        throw error; // Re-throw to let component handle it
-      }
-      
-      // Other errors
-      showAlert('error', 'Failed to create trading plan. Please try again.', 5000);
-      throw error;
-    }
-  };
-
   const createSmartTrade = async (asset, amount, tradeType, leverage = 1) => {
     if (!user) throw new Error('User not found');
     
@@ -308,114 +362,37 @@ export const DatabaseProvider = ({ children }) => {
     }
   };
 
-  // Real-time updates
-  useEffect(() => {
-    if (!user || !user.id) return;
 
-    let unsubscribeBalance = null;
-    let unsubscribeTrades = null;
-    let unsubscribeTradingPlans = null;
-    let unsubscribeChat = null;
-
+  // Test function to manually trigger order processing
+  const testOrderProcessing = async () => {
     try {
-      // Subscribe to user balance changes
-      unsubscribeBalance = database.subscribeToUserBalance(user.id, (doc) => {
-        if (doc.exists()) {
-          setUser(prev => ({ ...prev, ...doc.data() }));
-        }
-      });
-
-      // Subscribe to user trades
-      unsubscribeTrades = database.subscribeToUserTrades(user.id, (snapshot) => {
-        const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setUserTrades(trades);
-      });
-
-      if (database.USE_SUPABASE_PLANS) {
-        // Supabase realtime
-        unsubscribeTradingPlans = database.supabaseSubscribeToUserTradingPlans(user.id, (list) => {
-          const plans = (list || []).map(row => ({
-            id: row.id,
-            userId: row.user_id,
-            investmentAmount: row.investment_amount,
-            assetSymbol: row.asset_symbol,
-            status: row.status,
-            durationHours: row.duration_hours,
-            yieldRange: [row.yield_range_min, row.yield_range_max],
-            createdAt: row.created_at,
-            completedAt: row.completed_at,
-            profitAmount: row.profit_amount,
-            totalReturn: row.total_return
-          }));
-          setUserTradingPlans(plans);
-        });
-      } else {
-        // Firestore realtime
-        unsubscribeTradingPlans = database.subscribeToUserTradingPlans(user.id, (snapshot) => {
-          const plans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setUserTradingPlans(plans);
-          
-          plans.forEach(plan => {
-            if (plan.status === 'completed' && plan.completedAt) {
-              const totalReturn = plan.totalReturn || (plan.investmentAmount + (plan.profitAmount || 0));
-              showAlert('success', 
-                `🎉 Your trading plan for ${plan.assetSymbol} has completed successfully! A total of $${totalReturn.toFixed(2)} has been added to your balance.`,
-                8000
-              );
-            }
-          });
-        });
-      }
-
-      // Subscribe to chat messages
-      unsubscribeChat = chat.subscribeToChatMessages(user.id, (snapshot) => {
-        console.log('=== CHAT SUBSCRIPTION UPDATE ===');
-        console.log('User ID:', user.id);
-        console.log('Snapshot docs count:', snapshot.docs.length);
-        console.log('Snapshot docs:', snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        
-        const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // Sort messages by createdAt in ascending order (oldest first) for proper chat flow
-        const sortedMessages = messages.sort((a, b) => {
-          const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-          const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-          return timeA - timeB; // Ascending order (oldest first)
-        });
-        
-        console.log('Processed messages (sorted):', sortedMessages);
-        setChatMessages(sortedMessages);
-      });
+      console.log('🧪 Testing order processing...');
+      await backgroundService.processOrdersNow();
+      console.log('✅ Order processing test completed');
     } catch (error) {
-      console.error('Error setting up real-time subscriptions:', error);
+      console.error('❌ Error testing order processing:', error);
     }
-
-    return () => {
-      if (unsubscribeBalance) unsubscribeBalance();
-      if (unsubscribeTrades) unsubscribeTrades();
-      if (unsubscribeTradingPlans) unsubscribeTradingPlans();
-      if (unsubscribeChat) unsubscribeChat();
-    };
-  }, [user?.id]); // Only depend on user.id to avoid unnecessary re-subscriptions
+  };
 
   const value = {
     user,
     userTrades,
-    userTradingPlans,
     userDeposits,
     userWithdrawals,
     chatMessages,
     isLoading,
+    todaysProfit,
     createDeposit,
     createWithdrawal,
     createTrade,
-    createTradingPlan,
     createSmartTrade,
     closeTrade,
     sendMessage,
     sendAdminMessage,
     loadUserData,
-    updateUserBalance: database.updateUserBalance
+    updateUserBalance: database.updateUserBalance,
+    backgroundService, // Expose for testing
+    testOrderProcessing
   };
 
   return (

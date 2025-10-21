@@ -12,11 +12,7 @@ import {
   formatPrice,
   formatPercentage,
   generateRealTimeChartData,
-  createCryptoWebSocket,
-  createForexWebSocket,
-  createStockWebSocket,
-  createETFWebSocket,
-  createFuturesWebSocket
+  createCryptoWebSocket
 } from '../services/api';
 import SparklineChart from './SparklineChart';
 

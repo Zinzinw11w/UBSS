@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDatabase } from '../contexts/DatabaseContext';
-import * as chat from '../services/chat';
 
 const LiveChat = ({ isOpen, onClose }) => {
   const { sendMessage, chatMessages } = useDatabase();

@@ -3,13 +3,11 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
-  deleteDoc, 
   getDoc, 
   getDocs, 
   query, 
   where, 
   orderBy, 
-  limit, 
   onSnapshot, 
   serverTimestamp, 
   increment,
@@ -17,153 +15,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import axios from 'axios';
-import { supabase } from '../supabaseClient';
-
-// Backend routing flags (temporary while migrating)
-export const USE_SUPABASE_PLANS = true;
-export const USE_SUPABASE_TRADES = true;
-
-// =========================
-// Supabase Helpers (Users)
-// =========================
-export const supabaseEnsureUser = async (walletAddress) => {
-  const lower = walletAddress.toLowerCase();
-  // Try find existing
-  const { data: existing, error: findErr } = await supabase
-    .from('users')
-    .select('*')
-    .eq('wallet_address', lower)
-    .limit(1)
-    .maybeSingle();
-  if (findErr && findErr.code !== 'PGRST116') throw findErr;
-  if (existing) return existing;
-
-  // Create new
-  const { data: created, error: createErr } = await supabase
-    .from('users')
-    .insert([{ wallet_address: lower, balance: 0 }])
-    .select()
-    .single();
-  if (createErr) throw createErr;
-  return created;
-};
-
-export const supabaseGetUserByWallet = async (walletAddress) => {
-  const lower = walletAddress.toLowerCase();
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('wallet_address', lower)
-    .limit(1)
-    .maybeSingle();
-  if (error && error.code !== 'PGRST116') throw error;
-  return data || null;
-};
-
-// ==================================
-// Supabase Smart Trading Plan methods
-// ==================================
-export const createTradingPlanSupabase = async (walletAddress, planData, currentBalanceOverride) => {
-  // Ensure user row
-  const userRow = await supabaseEnsureUser(walletAddress);
-  let currentBalance = Number(userRow.balance || 0);
-  // If Supabase user has no balance yet but the app knows current balance, seed it
-  if ((currentBalance === 0 || Number.isNaN(currentBalance)) && typeof currentBalanceOverride === 'number') {
-    currentBalance = Number(currentBalanceOverride) || 0;
-    await supabase
-      .from('users')
-      .update({ balance: currentBalance })
-      .eq('id', userRow.id);
-  }
-  const planAmount = Number(planData.amount || 0);
-
-  if (currentBalance < planAmount) {
-    return {
-      success: false,
-      error: 'INSUFFICIENT_FUNDS',
-      currentBalance,
-      requiredAmount: planAmount,
-      shortfall: planAmount - currentBalance
-    };
-  }
-
-  const days = parseInt((planData.timeframe || '1 Day').split(' ')[0]) || 1;
-  const durationHours = days * 24;
-  const yieldRange = days === 1 ? [1.5, 1.8]
-    : days === 7 ? [1.8, 2.1]
-    : days === 15 ? [2.1, 2.5]
-    : days === 30 ? [2.5, 2.8]
-    : days === 60 ? [2.8, 3.0]
-    : [1.5, 3.0];
-
-  // Insert plan
-  const insertPayload = {
-    user_id: userRow.id,
-    investment_amount: planAmount,
-    asset_symbol: planData.symbol || 'AAPL',
-    status: 'active',
-    duration_hours: durationHours,
-    yield_range_min: yieldRange[0],
-    yield_range_max: yieldRange[1]
-  };
-
-  const { data: planRows, error: planErr } = await supabase
-    .from('trading_plans')
-    .insert([insertPayload])
-    .select()
-    .single();
-  if (planErr) throw planErr;
-
-  // Deduct balance (non-transactional client-side step)
-  const { error: updErr } = await supabase
-    .from('users')
-    .update({ balance: currentBalance - planAmount })
-    .eq('id', userRow.id);
-  if (updErr) throw updErr;
-
-  const planId = planRows.id;
-  return {
-    success: true,
-    planId,
-    newBalance: currentBalance - planAmount,
-    planData: {
-      id: planId,
-      userId: userRow.id,
-      investmentAmount: planAmount,
-      assetSymbol: insertPayload.asset_symbol,
-      status: 'active',
-      durationHours,
-      yieldRange
-    }
-  };
-};
-
-export const supabaseListUserActivePlans = async (userId) => {
-  const { data, error } = await supabase
-    .from('trading_plans')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
-};
-
-export const supabaseSubscribeToUserTradingPlans = (userId, onChange) => {
-  const channel = supabase.channel(`plans_${userId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'trading_plans', filter: `user_id=eq.${userId}` }, async () => {
-      const list = await supabaseListUserActivePlans(userId);
-      onChange(list);
-    })
-    .subscribe();
-
-  // Initial load
-  supabaseListUserActivePlans(userId).then(onChange).catch(() => {});
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-};
+import CryptoJS from 'crypto-js';
+import { authenticator } from 'otplib';
 
 // Get user's IP address
 export const getUserIP = async () => {
@@ -405,83 +258,40 @@ export const rejectWithdrawal = async (withdrawalId, adminId, reason) => {
 // Trading System
 export const createTrade = async (userId, asset, amount, tradeType, leverage = 1) => {
   try {
-    if (USE_SUPABASE_TRADES) {
-      // Load user row
-      const { data: userRow, error: userErr } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (userErr) throw userErr;
-      const currentBalance = Number(userRow.balance || 0);
-      if (currentBalance < amount) throw new Error('Insufficient balance');
-
-      const currentPrice = await getRealTimePrice(asset);
-      const insert = {
-        user_id: userId,
-        asset: (asset || 'BTC').toUpperCase(),
-        amount: Number(amount),
-        trade_type: tradeType,
-        leverage: Number(leverage),
-        entry_price: currentPrice,
-        current_price: currentPrice,
-        status: 'open',
-        profit: 0
-      };
-      const { data: row, error: insErr } = await supabase
-        .from('trades')
-        .insert([insert])
-        .select()
-        .single();
-      if (insErr) throw insErr;
-
-      const { error: balErr } = await supabase
-        .from('users')
-        .update({ balance: currentBalance - Number(amount) })
-        .eq('id', userId);
-      if (balErr) throw balErr;
-
-      return {
-        id: row.id,
-        userId,
-        asset: row.asset,
-        amount: row.amount,
-        tradeType: row.trade_type,
-        leverage: row.leverage,
-        entryPrice: row.entry_price,
-        currentPrice: row.current_price,
-        status: row.status,
-        profit: row.profit,
-        createdAt: row.created_at
-      };
-    } else {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (!userDoc.exists()) {
-        throw new Error('User not found');
-      }
-      const userData = userDoc.data();
-      if (userData.balance < amount) {
-        throw new Error('Insufficient balance');
-      }
-      const currentPrice = await getRealTimePrice(asset);
-      const tradeData = {
-        userId,
-        asset: asset?.toUpperCase() || 'BTC',
-        amount: parseFloat(amount),
-        tradeType,
-        leverage: parseFloat(leverage),
-        entryPrice: currentPrice,
-        currentPrice,
-        status: 'open',
-        profit: 0,
-        createdAt: serverTimestamp(),
-        closedAt: null,
-        isSmartTrade: false
-      };
-      const docRef = await addDoc(collection(db, 'trades'), tradeData);
-      await updateUserBalance(userId, -amount);
-      return { id: docRef.id, ...tradeData };
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (!userDoc.exists()) {
+      throw new Error('User not found');
     }
+
+    const userData = userDoc.data();
+    if (userData.balance < amount) {
+      throw new Error('Insufficient balance');
+    }
+
+    // Get real-time price
+    const currentPrice = await getRealTimePrice(asset);
+    
+    const tradeData = {
+      userId,
+      asset: asset?.toUpperCase() || 'BTC',
+      amount: parseFloat(amount),
+      tradeType, // 'buy' or 'sell'
+      leverage: parseFloat(leverage),
+      entryPrice: currentPrice,
+      currentPrice,
+      status: 'open',
+      profit: 0,
+      createdAt: serverTimestamp(),
+      closedAt: null,
+      isSmartTrade: false
+    };
+
+    const docRef = await addDoc(collection(db, 'trades'), tradeData);
+    
+    // Deduct amount from user balance
+    await updateUserBalance(userId, -amount);
+
+    return { id: docRef.id, ...tradeData };
   } catch (error) {
     console.error('Error creating trade:', error);
     throw error;
@@ -525,131 +335,6 @@ export const checkRateLimit = (walletAddress) => {
   orderRateLimit.set(walletAddress, recentOrders);
   
   return true; // Rate limit OK
-};
-
-// Trading Plan Creation with Balance Deduction
-export const createTradingPlan = async (walletAddress, planData) => {
-  try {
-    console.log('Creating trading plan for wallet:', walletAddress);
-    console.log('Plan data:', planData);
-    
-    // Check rate limiting first
-    if (!checkRateLimit(walletAddress)) {
-      return {
-        success: false,
-        error: 'RATE_LIMIT_EXCEEDED',
-        message: 'Too many orders. Please wait before creating another order.'
-      };
-    }
-    
-    // Get user data
-    const userQuery = query(
-      collection(db, 'users'),
-      where('walletAddress', '==', walletAddress.toLowerCase())
-    );
-    const userSnapshot = await getDocs(userQuery);
-    
-    if (userSnapshot.empty) {
-      throw new Error('User not found');
-    }
-    
-    const userDoc = userSnapshot.docs[0];
-    const userData = userDoc.data();
-    const currentBalance = userData.balance || 0;
-    const planAmount = planData.amount || 0;
-    
-    console.log('Current balance:', currentBalance);
-    console.log('Plan amount:', planAmount);
-    
-    // Server-side balance validation
-    if (currentBalance < planAmount) {
-      console.log('Insufficient balance detected');
-      return {
-        success: false,
-        error: 'INSUFFICIENT_FUNDS',
-        currentBalance,
-        requiredAmount: planAmount,
-        shortfall: planAmount - currentBalance
-      };
-    }
-    
-    // Convert timeframe to hours
-    const timeframeHours = parseInt(planData.timeframe.split(' ')[0]) * 24;
-    
-    // Get yield range based on timeframe
-    const getYieldRange = (timeframe) => {
-      const days = parseInt(timeframe.split(' ')[0]);
-      if (days === 1) {
-        return [1.50, 1.80];
-      } else if (days === 7) {
-        return [1.80, 2.10];
-      } else if (days === 15) {
-        return [2.10, 2.50];
-      } else if (days === 30) {
-        return [2.50, 2.80];
-      } else if (days === 60) {
-        return [2.80, 3.00];
-      } else {
-        return [1.50, 3.00];
-      }
-    };
-    
-    const yieldRange = getYieldRange(planData.timeframe);
-    
-    // Create trading plan document
-    const planWithValidation = {
-      userId: userDoc.id,
-      investmentAmount: planAmount,
-      assetSymbol: planData.symbol || 'AAPL',
-      status: 'active',
-      createdAt: serverTimestamp(),
-      durationHours: timeframeHours,
-      yieldRange: yieldRange,
-      // Additional fields for compatibility
-      symbol: planData.symbol,
-      amount: planAmount,
-      timeframe: planData.timeframe,
-      direction: planData.direction,
-      openPrice: planData.openPrice,
-      closePrice: null,
-      profit: 0,
-      type: 'Smart Trading',
-      startTime: planData.startTime,
-      endTime: planData.endTime,
-      walletAddress: walletAddress.toLowerCase(),
-      balanceAtCreation: currentBalance
-    };
-    
-    // Use Firestore transaction to ensure data integrity
-    const result = await runTransaction(db, async (transaction) => {
-      // Create trading plan document
-      const planRef = doc(collection(db, 'trading_plans'));
-      transaction.set(planRef, planWithValidation);
-      
-      // Update user's balance (deduct the plan amount)
-      const userRef = doc(db, 'users', userDoc.id);
-      transaction.update(userRef, {
-        balance: increment(-planAmount),
-        totalTrades: increment(1),
-        lastTradeAt: serverTimestamp()
-      });
-      
-      return planRef.id;
-    });
-    
-    console.log('Trading plan created successfully:', result);
-    
-    return {
-      success: true,
-      planId: result,
-      newBalance: currentBalance - planAmount,
-      planData: { ...planWithValidation, id: result }
-    };
-    
-  } catch (error) {
-    console.error('Error creating trading plan:', error);
-    throw error;
-  }
 };
 
 // Balance Validation and Order Creation with Real-time Alerts
@@ -758,25 +443,53 @@ export const closeTrade = async (tradeId) => {
       const days = parseInt(tradeData.timeframe?.split(' ')[0]) || 1;
       const baseAmount = tradeData.amount || tradeData.orderAmount || 0;
       
-      // More realistic profit calculation
-      let profitRate;
+      // Calculate total profit based on timeframe and amount
+      let totalProfitRate;
+      
       if (days === 1) {
-        profitRate = Math.random() * 0.03 + 0.025; // 2.5% to 5.5%
+        // 1 day: (1000-9999USD) 1.5% to 1.8% profit
+        if (baseAmount >= 1000 && baseAmount <= 9999) {
+          totalProfitRate = Math.random() * 0.003 + 0.015; // 1.5% to 1.8%
+        } else {
+          totalProfitRate = Math.random() * 0.01 + 0.01; // 1.0% to 2.0% for other amounts
+        }
       } else if (days === 7) {
-        profitRate = Math.random() * 0.03 + 0.018; // 1.8% to 4.8%
+        // 7 Days: (10000-49999USD) 1.8% to 4.8% profit
+        if (baseAmount >= 10000 && baseAmount <= 49999) {
+          totalProfitRate = Math.random() * 0.03 + 0.018; // 1.8% to 4.8%
+        } else {
+          totalProfitRate = Math.random() * 0.02 + 0.015; // 1.5% to 3.5% for other amounts
+        }
       } else if (days === 15) {
-        profitRate = Math.random() * 0.03 + 0.015; // 1.5% to 4.5%
+        // 15 days: (50000-199999USD) 2.10% to 2.5% profit
+        if (baseAmount >= 50000 && baseAmount <= 199999) {
+          totalProfitRate = Math.random() * 0.004 + 0.021; // 2.10% to 2.5%
+        } else {
+          totalProfitRate = Math.random() * 0.015 + 0.018; // 1.8% to 3.3% for other amounts
+        }
       } else if (days === 30) {
-        profitRate = Math.random() * 0.025 + 0.012; // 1.2% to 3.7%
+        // 30 days: (100000-499999USD) 2.5% to 2.8% profit
+        if (baseAmount >= 100000 && baseAmount <= 499999) {
+          totalProfitRate = Math.random() * 0.003 + 0.025; // 2.5% to 2.8%
+        } else {
+          totalProfitRate = Math.random() * 0.02 + 0.02; // 2.0% to 4.0% for other amounts
+        }
+      } else if (days === 60) {
+        // 60 days: (500000-999999USD) 2.8% to 3% profit
+        if (baseAmount >= 500000 && baseAmount <= 999999) {
+          totalProfitRate = Math.random() * 0.002 + 0.028; // 2.8% to 3.0%
+        } else {
+          totalProfitRate = Math.random() * 0.025 + 0.025; // 2.5% to 5.0% for other amounts
+        }
       } else {
-        profitRate = Math.random() * 0.02 + 0.01; // 1.0% to 3.0%
+        totalProfitRate = Math.random() * 0.01 + 0.01; // 1.0% to 2.0% for other timeframes
       }
       
-      const finalProfit = baseAmount * profitRate;
+      const finalProfit = baseAmount * totalProfitRate;
       
       await updateDoc(tradeRef, {
         status: 'completed',
-        closePrice: tradeData.openPrice * (1 + profitRate),
+        closePrice: tradeData.openPrice * (1 + totalProfitRate),
         profit: finalProfit,
         totalRevenue: finalProfit,
         closedAt: serverTimestamp()
@@ -829,21 +542,56 @@ export const updateActiveTradeProfits = async () => {
       const tradeData = tradeDoc.data();
       const tradeRef = doc(db, 'trades', tradeDoc.id);
       
-      // Calculate daily earnings based on timeframe
+      // Calculate daily earnings based on timeframe and amount
       const days = parseInt(tradeData.timeframe?.split(' ')[0]) || 1;
       const baseAmount = tradeData.amount || tradeData.orderAmount || 0;
       
+      let totalProfitRate;
       let dailyRate;
+      
       if (days === 1) {
-        dailyRate = 0.03; // 3% daily
+        // 1 day: (1000-9999USD) 1.5% to 1.8% profit
+        if (baseAmount >= 1000 && baseAmount <= 9999) {
+          totalProfitRate = Math.random() * 0.003 + 0.015; // 1.5% to 1.8%
+        } else {
+          totalProfitRate = Math.random() * 0.01 + 0.01; // 1.0% to 2.0% for other amounts
+        }
+        dailyRate = totalProfitRate; // For 1 day, all profit is added in one day
       } else if (days === 7) {
-        dailyRate = 0.0025; // 0.25% daily
+        // 7 Days: (10000-49999USD) 1.8% to 4.8% profit
+        if (baseAmount >= 10000 && baseAmount <= 49999) {
+          totalProfitRate = Math.random() * 0.03 + 0.018; // 1.8% to 4.8%
+        } else {
+          totalProfitRate = Math.random() * 0.02 + 0.015; // 1.5% to 3.5% for other amounts
+        }
+        dailyRate = totalProfitRate / 7; // Distribute profit across 7 days
       } else if (days === 15) {
-        dailyRate = 0.0015; // 0.15% daily
+        // 15 days: (50000-199999USD) 2.10% to 2.5% profit
+        if (baseAmount >= 50000 && baseAmount <= 199999) {
+          totalProfitRate = Math.random() * 0.004 + 0.021; // 2.10% to 2.5%
+        } else {
+          totalProfitRate = Math.random() * 0.015 + 0.018; // 1.8% to 3.3% for other amounts
+        }
+        dailyRate = totalProfitRate / 15; // Distribute profit across 15 days
       } else if (days === 30) {
-        dailyRate = 0.0012; // 0.12% daily
+        // 30 days: (100000-499999USD) 2.5% to 2.8% profit
+        if (baseAmount >= 100000 && baseAmount <= 499999) {
+          totalProfitRate = Math.random() * 0.003 + 0.025; // 2.5% to 2.8%
+        } else {
+          totalProfitRate = Math.random() * 0.02 + 0.02; // 2.0% to 4.0% for other amounts
+        }
+        dailyRate = totalProfitRate / 30; // Distribute profit across 30 days
+      } else if (days === 60) {
+        // 60 days: (500000-999999USD) 2.8% to 3% profit
+        if (baseAmount >= 500000 && baseAmount <= 999999) {
+          totalProfitRate = Math.random() * 0.002 + 0.028; // 2.8% to 3.0%
+        } else {
+          totalProfitRate = Math.random() * 0.025 + 0.025; // 2.5% to 5.0% for other amounts
+        }
+        dailyRate = totalProfitRate / 60; // Distribute profit across 60 days
       } else {
-        dailyRate = 0.001; // 0.1% daily
+        totalProfitRate = Math.random() * 0.01 + 0.01; // 1.0% to 2.0% for other timeframes
+        dailyRate = totalProfitRate / days; // Distribute profit across the timeframe
       }
       
       const dailyEarnings = baseAmount * dailyRate;
@@ -860,6 +608,107 @@ export const updateActiveTradeProfits = async () => {
     console.log('Updated active Smart Trading profits');
   } catch (error) {
     console.error('Error updating active trade profits:', error);
+  }
+};
+
+// Auto-complete orders based on timeframe
+export const processCompletedOrders = async () => {
+  try {
+    console.log('Processing completed orders...');
+    
+    // Get all active orders
+    const activeOrdersQuery = query(
+      collection(db, 'trades'),
+      where('status', '==', 'Active')
+    );
+    
+    const activeOrdersSnapshot = await getDocs(activeOrdersQuery);
+    const now = new Date();
+    
+    for (const orderDoc of activeOrdersSnapshot.docs) {
+      const orderData = orderDoc.data();
+      const createdAt = orderData.createdAt?.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt || 0);
+      
+      // Calculate expected completion time based on timeframe
+      let expectedCompletionTime;
+      const timeframe = orderData.timeframe || '1 Day';
+      const days = parseInt(timeframe.split(' ')[0]) || 1;
+      
+      expectedCompletionTime = new Date(createdAt.getTime() + (days * 24 * 60 * 60 * 1000));
+      
+      // Check if order should be completed
+      if (now >= expectedCompletionTime) {
+        console.log(`Completing order ${orderDoc.id} - timeframe expired`);
+        
+        // Calculate total profit based on timeframe and amount
+        const baseAmount = orderData.amount || orderData.orderAmount || 0;
+        let totalProfitRate;
+        
+        if (days === 1) {
+          // 1 day: (1000-9999USD) 1.5% to 1.8% profit
+          if (baseAmount >= 1000 && baseAmount <= 9999) {
+            totalProfitRate = Math.random() * 0.003 + 0.015; // 1.5% to 1.8%
+          } else {
+            totalProfitRate = Math.random() * 0.01 + 0.01; // 1.0% to 2.0% for other amounts
+          }
+        } else if (days === 7) {
+          // 7 Days: (10000-49999USD) 1.8% to 4.8% profit
+          if (baseAmount >= 10000 && baseAmount <= 49999) {
+            totalProfitRate = Math.random() * 0.03 + 0.018; // 1.8% to 4.8%
+          } else {
+            totalProfitRate = Math.random() * 0.02 + 0.015; // 1.5% to 3.5% for other amounts
+          }
+        } else if (days === 15) {
+          // 15 days: (50000-199999USD) 2.10% to 2.5% profit
+          if (baseAmount >= 50000 && baseAmount <= 199999) {
+            totalProfitRate = Math.random() * 0.004 + 0.021; // 2.10% to 2.5%
+          } else {
+            totalProfitRate = Math.random() * 0.015 + 0.018; // 1.8% to 3.3% for other amounts
+          }
+        } else if (days === 30) {
+          // 30 days: (100000-499999USD) 2.5% to 2.8% profit
+          if (baseAmount >= 100000 && baseAmount <= 499999) {
+            totalProfitRate = Math.random() * 0.003 + 0.025; // 2.5% to 2.8%
+          } else {
+            totalProfitRate = Math.random() * 0.02 + 0.02; // 2.0% to 4.0% for other amounts
+          }
+        } else if (days === 60) {
+          // 60 days: (500000-999999USD) 2.8% to 3% profit
+          if (baseAmount >= 500000 && baseAmount <= 999999) {
+            totalProfitRate = Math.random() * 0.002 + 0.028; // 2.8% to 3.0%
+          } else {
+            totalProfitRate = Math.random() * 0.025 + 0.025; // 2.5% to 5.0% for other amounts
+          }
+        } else {
+          totalProfitRate = Math.random() * 0.01 + 0.01; // 1.0% to 2.0% for other timeframes
+        }
+        
+        const finalProfit = baseAmount * totalProfitRate;
+        const totalReturn = baseAmount + finalProfit;
+        
+        // Update order status
+        await updateDoc(doc(db, 'trades', orderDoc.id), {
+          status: 'completed',
+          profit: finalProfit,
+          totalReturn: totalReturn,
+          completedAt: serverTimestamp(),
+          profitRate: totalProfitRate
+        });
+        
+        // Add profit to user balance
+        if (orderData.walletAddress) {
+          await updateUserBalance(orderData.walletAddress, finalProfit, 'profit');
+        } else if (orderData.userId) {
+          await updateUserBalance(orderData.userId, finalProfit, 'profit');
+        }
+        
+        console.log(`Order ${orderDoc.id} completed with profit: $${finalProfit.toFixed(2)}`);
+      }
+    }
+    
+    console.log('Completed order processing');
+  } catch (error) {
+    console.error('Error processing completed orders:', error);
   }
 };
 
@@ -894,39 +743,27 @@ export const getRealTimePrice = async (asset) => {
 };
 
 // Get user orders/trades
-export const getUserTrades = async (userId) => {
+export const getUserTrades = async (userId, walletAddress) => {
   try {
-    if (USE_SUPABASE_TRADES) {
-      const { data, error } = await supabase
-        .from('trades')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []).map(row => ({
-        id: row.id,
-        userId: row.user_id,
-        asset: row.asset,
-        amount: row.amount,
-        tradeType: row.trade_type,
-        leverage: row.leverage,
-        entryPrice: row.entry_price,
-        currentPrice: row.current_price,
-        closePrice: row.close_price,
-        status: row.status,
-        profit: row.profit,
-        createdAt: row.created_at,
-        closedAt: row.closed_at
-      }));
-    } else {
-      const q = query(
-        collection(db, 'trades'),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
+    console.log('Getting user trades for:', { userId, walletAddress });
+    
+    // Query by userId (primary identifier)
+    const q = query(
+      collection(db, 'trades'),
+      where('userId', '==', userId)
+    );
+    
+    const snapshot = await getDocs(q);
+    const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    console.log('Retrieved trades:', trades.length, trades);
+    
+    // Sort by createdAt in descending order
+    return trades.sort((a, b) => {
+      const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+      const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      return timeB - timeA; // Descending order (newest first)
+    });
   } catch (error) {
     console.error('Error getting user trades:', error);
     throw error;
@@ -961,6 +798,284 @@ export const getUserWithdrawals = async (userId) => {
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error('Error getting user withdrawals:', error);
+    throw error;
+  }
+};
+
+// Admin Authentication Functions
+
+// Generate a secure secret key for TOTP
+const generateSecretKey = () => {
+  return authenticator.generateSecret();
+};
+
+// Generate recovery codes
+const generateRecoveryCodes = () => {
+  const codes = [];
+  for (let i = 0; i < 10; i++) {
+    codes.push(Math.random().toString(36).substring(2, 10).toUpperCase());
+  }
+  return codes;
+};
+
+// Encrypt sensitive data
+const encrypt = (text) => {
+  const secretKey = process.env.REACT_APP_ENCRYPTION_KEY || 'default-secret-key';
+  return CryptoJS.AES.encrypt(text, secretKey).toString();
+};
+
+// Decrypt sensitive data
+const decrypt = (encryptedText) => {
+  const secretKey = process.env.REACT_APP_ENCRYPTION_KEY || 'default-secret-key';
+  const bytes = CryptoJS.AES.decrypt(encryptedText, secretKey);
+  return bytes.toString(CryptoJS.enc.Utf8);
+};
+
+// Create admin user
+export const createAdminUser = async (username, password, email) => {
+  try {
+    const hashedPassword = CryptoJS.SHA256(password).toString();
+    const adminData = {
+      username,
+      email,
+      password: hashedPassword,
+      role: 'admin',
+      twoFactorEnabled: false,
+      twoFactorSecret: null,
+      recoveryCodes: [],
+      createdAt: serverTimestamp(),
+      lastLogin: null,
+      isActive: true
+    };
+
+    const docRef = await addDoc(collection(db, 'admins'), adminData);
+    return { id: docRef.id, ...adminData };
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    throw error;
+  }
+};
+
+// Authenticate admin user
+export const authenticateAdmin = async (username, password) => {
+  try {
+    const q = query(
+      collection(db, 'admins'),
+      where('username', '==', username),
+      where('isActive', '==', true)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return { success: false, message: 'Invalid credentials' };
+    }
+
+    const adminDoc = querySnapshot.docs[0];
+    const adminData = adminDoc.data();
+    const hashedPassword = CryptoJS.SHA256(password).toString();
+
+    if (adminData.password !== hashedPassword) {
+      return { success: false, message: 'Invalid credentials' };
+    }
+
+    // Update last login
+    await updateDoc(doc(db, 'admins', adminDoc.id), {
+      lastLogin: serverTimestamp()
+    });
+
+    // Generate session token
+    const token = CryptoJS.lib.WordArray.random(32).toString();
+
+    return {
+      success: true,
+      admin: { id: adminDoc.id, ...adminData },
+      token,
+      requires2FA: adminData.twoFactorEnabled
+    };
+  } catch (error) {
+    console.error('Error authenticating admin:', error);
+    throw error;
+  }
+};
+
+// Setup 2FA for admin
+export const setup2FA = async (adminId) => {
+  try {
+    const secretKey = generateSecretKey();
+    const recoveryCodes = generateRecoveryCodes();
+    
+    // Generate QR code data
+    const qrCodeData = authenticator.keyuri(
+      'UBSS Admin',
+      'admin@ubss.com',
+      secretKey
+    );
+
+    // Encrypt and store the secret
+    const encryptedSecret = encrypt(secretKey);
+
+    await updateDoc(doc(db, 'admins', adminId), {
+      twoFactorSecret: encryptedSecret,
+      recoveryCodes: recoveryCodes.map(code => encrypt(code))
+    });
+
+    return {
+      success: true,
+      secretKey,
+      qrCodeData,
+      recoveryCodes
+    };
+  } catch (error) {
+    console.error('Error setting up 2FA:', error);
+    throw error;
+  }
+};
+
+// Verify 2FA code
+export const verify2FA = async (adminId, totpCode) => {
+  try {
+    const adminDoc = await getDoc(doc(db, 'admins', adminId));
+    
+    if (!adminDoc.exists()) {
+      return { success: false, message: 'Admin not found' };
+    }
+
+    const adminData = adminDoc.data();
+    
+    if (!adminData.twoFactorEnabled || !adminData.twoFactorSecret) {
+      return { success: false, message: '2FA not enabled' };
+    }
+
+    const decryptedSecret = decrypt(adminData.twoFactorSecret);
+    const isValid = authenticator.verify({ token: totpCode, secret: decryptedSecret });
+
+    if (!isValid) {
+      return { success: false, message: 'Invalid 2FA code' };
+    }
+
+    // Generate session token
+    const token = CryptoJS.lib.WordArray.random(32).toString();
+
+    return {
+      success: true,
+      admin: { id: adminDoc.id, ...adminData },
+      token
+    };
+  } catch (error) {
+    console.error('Error verifying 2FA:', error);
+    throw error;
+  }
+};
+
+// Complete 2FA setup
+export const complete2FASetup = async (adminId, totpCode) => {
+  try {
+    const adminDoc = await getDoc(doc(db, 'admins', adminId));
+    
+    if (!adminDoc.exists()) {
+      return { success: false, message: 'Admin not found' };
+    }
+
+    const adminData = adminDoc.data();
+    
+    if (!adminData.twoFactorSecret) {
+      return { success: false, message: '2FA not initialized' };
+    }
+
+    const decryptedSecret = decrypt(adminData.twoFactorSecret);
+    const isValid = authenticator.verify({ token: totpCode, secret: decryptedSecret });
+
+    if (!isValid) {
+      return { success: false, message: 'Invalid verification code' };
+    }
+
+    // Enable 2FA
+    await updateDoc(doc(db, 'admins', adminId), {
+      twoFactorEnabled: true
+    });
+
+    // Generate session token
+    const token = CryptoJS.lib.WordArray.random(32).toString();
+
+    return {
+      success: true,
+      admin: { id: adminDoc.id, ...adminData, twoFactorEnabled: true },
+      token
+    };
+  } catch (error) {
+    console.error('Error completing 2FA setup:', error);
+    throw error;
+  }
+};
+
+// Verify recovery code
+export const verifyRecoveryCode = async (adminId, recoveryCode) => {
+  try {
+    const adminDoc = await getDoc(doc(db, 'admins', adminId));
+    
+    if (!adminDoc.exists()) {
+      return { success: false, message: 'Admin not found' };
+    }
+
+    const adminData = adminDoc.data();
+    
+    if (!adminData.recoveryCodes || adminData.recoveryCodes.length === 0) {
+      return { success: false, message: 'No recovery codes available' };
+    }
+
+    // Check if recovery code matches
+    const isValidCode = adminData.recoveryCodes.some(encryptedCode => {
+      const decryptedCode = decrypt(encryptedCode);
+      return decryptedCode === recoveryCode;
+    });
+
+    if (!isValidCode) {
+      return { success: false, message: 'Invalid recovery code' };
+    }
+
+    // Remove used recovery code
+    const updatedCodes = adminData.recoveryCodes.filter(encryptedCode => {
+      const decryptedCode = decrypt(encryptedCode);
+      return decryptedCode !== recoveryCode;
+    });
+
+    await updateDoc(doc(db, 'admins', adminId), {
+      recoveryCodes: updatedCodes
+    });
+
+    // Generate session token
+    const token = CryptoJS.lib.WordArray.random(32).toString();
+
+    return {
+      success: true,
+      admin: { id: adminDoc.id, ...adminData },
+      token
+    };
+  } catch (error) {
+    console.error('Error verifying recovery code:', error);
+    throw error;
+  }
+};
+
+// Verify admin session
+export const verifyAdminSession = async (token) => {
+  try {
+    // In a real implementation, you would verify the token against stored sessions
+    // For now, we'll check if the token exists in localStorage
+    const storedToken = localStorage.getItem('adminToken');
+    const storedAdmin = localStorage.getItem('adminUser');
+    
+    if (!storedToken || !storedAdmin || storedToken !== token) {
+      return { success: false, message: 'Invalid session' };
+    }
+
+    return {
+      success: true,
+      admin: JSON.parse(storedAdmin)
+    };
+  } catch (error) {
+    console.error('Error verifying admin session:', error);
     throw error;
   }
 };
@@ -1010,70 +1125,32 @@ export const getAllTrades = async () => {
 };
 
 // Real-time listeners
-export const subscribeToUserTrades = (userId, callback) => {
+export const subscribeToUserTrades = (userId, walletAddress, callback) => {
   try {
-    if (USE_SUPABASE_TRADES) {
-      const channel = supabase.channel(`trades_${userId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'trades', filter: `user_id=eq.${userId}` }, async () => {
-          const { data, error } = await supabase
-            .from('trades')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
-          if (!error) {
-            const mapped = (data || []).map(row => ({
-              id: row.id,
-              userId: row.user_id,
-              asset: row.asset,
-              amount: row.amount,
-              tradeType: row.trade_type,
-              leverage: row.leverage,
-              entryPrice: row.entry_price,
-              currentPrice: row.current_price,
-              closePrice: row.close_price,
-              status: row.status,
-              profit: row.profit,
-              createdAt: row.created_at,
-              closedAt: row.closed_at
-            }));
-            callback({ docs: mapped.map(x => ({ id: x.id, data: () => x })) });
-          }
-        })
-        .subscribe();
-      // Initial emit
-      supabase
-        .from('trades')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => {
-          const mapped = (data || []).map(row => ({
-            id: row.id,
-            userId: row.user_id,
-            asset: row.asset,
-            amount: row.amount,
-            tradeType: row.trade_type,
-            leverage: row.leverage,
-            entryPrice: row.entry_price,
-            currentPrice: row.current_price,
-            closePrice: row.close_price,
-            status: row.status,
-            profit: row.profit,
-            createdAt: row.created_at,
-            closedAt: row.closed_at
-          }));
-          callback({ docs: mapped.map(x => ({ id: x.id, data: () => x })) });
-        });
-      return () => { supabase.removeChannel(channel); };
-    } else {
-      const q = query(
-        collection(db, 'trades'),
-        where('walletAddress', '==', userId.toLowerCase())
-      );
-      return onSnapshot(q, callback, (error) => {
-        console.error('Error in subscribeToUserTrades:', error);
+    console.log('Setting up trade subscription for:', { userId, walletAddress });
+    
+    // Query by userId first (primary identifier)
+    const q = query(
+      collection(db, 'trades'),
+      where('userId', '==', userId)
+    );
+    
+    // Set up listener for the query
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log('Trade subscription update:', {
+        userId,
+        walletAddress,
+        docsCount: snapshot.docs.length,
+        docs: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       });
-    }
+      
+      const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(snapshot);
+    }, (error) => {
+      console.error('Error in subscribeToUserTrades:', error);
+    });
+    
+    return unsubscribe;
   } catch (error) {
     console.error('Error setting up subscribeToUserTrades:', error);
     // Return a no-op unsubscribe function
@@ -1089,25 +1166,6 @@ export const subscribeToUserBalance = (userId, callback) => {
     });
   } catch (error) {
     console.error('Error setting up subscribeToUserBalance:', error);
-    // Return a no-op unsubscribe function
-    return () => {};
-  }
-};
-
-// Subscribe to user's trading plans
-export const subscribeToUserTradingPlans = (userId, callback) => {
-  try {
-    const q = query(
-      collection(db, 'trading_plans'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    return onSnapshot(q, callback, (error) => {
-      console.error('Error in subscribeToUserTradingPlans:', error);
-    });
-  } catch (error) {
-    console.error('Error setting up subscribeToUserTradingPlans:', error);
     // Return a no-op unsubscribe function
     return () => {};
   }

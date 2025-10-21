@@ -21,7 +21,7 @@ export default function MobileLoan() {
     phoneNumber: '',
     document: null
   });
-  const { isConnected, account } = useWallet();
+  const { isConnected } = useWallet();
 
   const loanTerms = ['7 Days', '14 Days', '30 Days', '60 Days', '90 Days'];
 

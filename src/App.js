@@ -13,7 +13,6 @@ import MobileSmartTrading from './components/MobileSmartTrading';
 import MobileLoan from './components/MobileLoan';
 import MobileAccount from './components/MobileAccount';
 import MobileNotifications from './components/MobileNotifications';
-import Footer from './components/Footer';
 import Account from './components/Account';
 import Market from './components/Market';
 import InviteFriends from './components/InviteFriends';
@@ -22,6 +21,9 @@ import Loan from './components/Loan';
 import SmartTrading from './components/SmartTrading';
 import SignMessageModal from './components/SignMessageModal';
 import AdminPanel from './components/AdminPanel';
+import AdminLogin from './components/AdminLogin';
+import CreateAdminUser from './components/CreateAdminUser';
+import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 import AlertSystem from './components/AlertSystem';
 import useIsMobile from './hooks/useIsMobile';
 
@@ -52,7 +54,13 @@ function App() {
                 </>
               )
             } />
-            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/create" element={<CreateAdminUser />} />
+            <Route path="/admin" element={
+              <ProtectedAdminRoute>
+                <AdminPanel />
+              </ProtectedAdminRoute>
+            } />
             <Route path="/account" element={
               isMobile ? <MobileAccount /> : (
                 <>

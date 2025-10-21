@@ -59,7 +59,7 @@ const CreatePlanModal = ({ isOpen, onClose, symbol, availableBalance = 0 }) => {
     if (days === 1) {
       return '1.50%-1.80%';
     } else if (days === 7) {
-      return '1.80%-2.10%';
+      return '1.80%-4.80%';
     } else if (days === 15) {
       return '2.10%-2.50%';
     } else if (days === 30) {

@@ -7,15 +7,9 @@ import PriceChart from './PriceChart';
 import { 
   formatPrice, 
   formatPercentage,
-  createForexWebSocket,
   createCryptoWebSocket,
-  createStockWebSocket,
-  createETFWebSocket,
-  createFuturesWebSocket,
   fetchRealTimeForexRates,
   generateRealTimeChartData,
-  createRealTimeForexWebSocket,
-  fetchCryptoPrices,
   fetchStockPrices,
   fetchETFPrices,
   fetchFuturesPrices

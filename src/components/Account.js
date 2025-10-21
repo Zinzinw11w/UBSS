@@ -6,10 +6,8 @@ import { useWallet } from '../contexts/WalletContext';
 import { useDatabase } from '../contexts/DatabaseContext';
 import AccountVerificationModal from './AccountVerificationModal';
 import DepositModal from './DepositModal';
-import WithdrawalModal from './WithdrawalModal';
 import BalanceModal from './BalanceModal';
 import LiveChat from './LiveChat';
- 
 
 const Account = () => {
   const [activeOrderTab, setActiveOrderTab] = useState('All orders');
@@ -25,7 +23,7 @@ const Account = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { isConnected, account, walletType, formatAddress } = useWallet();
-  const { user, userTrades, userTradingPlans, updateUserBalance } = useDatabase();
+  const { user, userTrades, updateUserBalance } = useDatabase();
 
   // Update selectedAccount when wallet address changes
   useEffect(() => {
@@ -126,17 +124,12 @@ const Account = () => {
     return () => clearInterval(interval);
   }, [userTrades, user, account, previousProfit, calculateTotalProfit, updateUserBalance]); // Re-run when userTrades changes
 
-  const orderTabs = ['All orders', 'Active Plans', 'Options', 'Smart', 'Static Income'];
+  const orderTabs = ['All orders', 'Options', 'Smart', 'Static Income'];
 
   // Get orders based on active tab
   const getOrdersForTab = () => {
     if (activeOrderTab === 'All orders') {
-      // Combine both trades and active trading plans
-      const allTrades = userTrades || [];
-      const activePlans = (userTradingPlans || []).filter(plan => plan.status === 'active');
-      return [...allTrades, ...activePlans];
-    } else if (activeOrderTab === 'Active Plans') {
-      return (userTradingPlans || []).filter(plan => plan.status === 'active');
+      return userTrades || [];
     } else if (activeOrderTab === 'Smart') {
       return (userTrades || []).filter(trade => trade.type === 'Smart Trading');
     } else if (activeOrderTab === 'Options') {
@@ -325,67 +318,40 @@ const Account = () => {
           {/* Order Content */}
           <div className="space-y-3 sm:space-y-4">
             {currentOrders.length > 0 ? (
-              currentOrders.map((order, index) => {
-                // Check if this is a trading plan
-                const isTradingPlan = order.status === 'active' && order.investmentAmount;
-                
-                return (
-                  <div key={order.id || index} className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                    {/* Order Header */}
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 sm:mb-4 space-y-2 sm:space-y-0">
-                      <div className="text-xs sm:text-sm text-gray-500">
-                        #{order.id ? order.id.slice(-8) : `ORDER-${index + 1}`}
-                        {isTradingPlan && <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">Active Plan</span>}
-                      </div>
-                      <div className="text-base sm:text-lg font-semibold text-gray-900">
-                        {isTradingPlan ? `${order.investmentAmount?.toFixed(2) || '0.00'} USD` : `${order.amount?.toFixed(2) || '0.00'} USD`}
+              currentOrders.map((order, index) => (
+                <div key={order.id || index} className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                  {/* Order Header */}
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 sm:mb-4 space-y-2 sm:space-y-0">
+                    <div className="text-xs sm:text-sm text-gray-500">#{order.id ? order.id.slice(-8) : `ORDER-${index + 1}`}</div>
+                    <div className="text-base sm:text-lg font-semibold text-gray-900">{order.amount?.toFixed(2) || '0.00'} USD</div>
+                  </div>
+
+                  {/* Order Details */}
+                  <div className="space-y-2 sm:space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                      <div className="font-bold text-gray-900 text-sm sm:text-base">{order.symbol || 'N/A'}</div>
+                      <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+                        <span className="text-xs sm:text-sm text-gray-600">{order.direction || 'Up'} {order.timeframe || '1 Day'}</span>
+                        <span className="text-green-600 font-semibold text-sm sm:text-base">{order.profit?.toFixed(2) || '0.00'} USD</span>
                       </div>
                     </div>
 
-                    {/* Order Details */}
-                    <div className="space-y-2 sm:space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                        <div className="font-bold text-gray-900 text-sm sm:text-base">
-                          {isTradingPlan ? order.assetSymbol : order.symbol || 'N/A'}
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
-                          <span className="text-xs sm:text-sm text-gray-600">
-                            {isTradingPlan ? `Smart Trading - ${order.timeframe || '1 Day'}` : `${order.direction || 'Up'} ${order.timeframe || '1 Day'}`}
-                          </span>
-                          <span className="text-green-600 font-semibold text-sm sm:text-base">
-                            {isTradingPlan ? 'Active' : `${order.profit?.toFixed(2) || '0.00'} USD`}
-                          </span>
-                        </div>
-                      </div>
+                    {/* Basic Order Info */}
+                    <div className="text-xs sm:text-sm text-gray-600 space-y-1">
+                      <div>Open: {order.openPrice?.toFixed(4) || '0.0000'}</div>
+                      <div>Close: {order.closePrice?.toFixed(4) || 'Pending'}</div>
+                      <div>Start time: {order.startTime ? new Date(order.startTime).toLocaleString() : 'N/A'}</div>
+                      <div>Expiration time: {order.endTime ? new Date(order.endTime).toLocaleString() : 'N/A'}</div>
+                      <div>Run time: {order.runTime || 'Calculating...'}</div>
+                    </div>
 
-                      {/* Basic Order Info */}
-                      <div className="text-xs sm:text-sm text-gray-600 space-y-1">
-                        {isTradingPlan ? (
-                          <>
-                            <div>Investment: {order.investmentAmount?.toFixed(2) || '0.00'} USD</div>
-                            <div>Yield Range: {order.yieldRange ? `${order.yieldRange[0]}%-${order.yieldRange[1]}%` : '1.5%-3.0%'}</div>
-                            <div>Created: {order.createdAt ? new Date(order.createdAt.toDate ? order.createdAt.toDate() : order.createdAt).toLocaleString() : 'N/A'}</div>
-                            <div>Duration: {order.durationHours ? `${order.durationHours} hours` : '24 hours'}</div>
-                            <div>Status: <span className="text-green-600 font-medium">Active</span></div>
-                          </>
-                        ) : (
-                          <>
-                            <div>Open: {order.openPrice?.toFixed(4) || '0.0000'}</div>
-                            <div>Close: {order.closePrice?.toFixed(4) || 'Pending'}</div>
-                            <div>Start time: {order.startTime ? new Date(order.startTime).toLocaleString() : 'N/A'}</div>
-                            <div>Expiration time: {order.endTime ? new Date(order.endTime).toLocaleString() : 'N/A'}</div>
-                            <div>Run time: {order.runTime || 'Calculating...'}</div>
-                          </>
-                        )}
-                      </div>
-
-                    {/* Detailed Order Info (for Smart Trading orders and Trading Plans) */}
-                    {(order.type === 'Smart Trading' || isTradingPlan) && (
+                    {/* Detailed Order Info (for Smart Trading orders) */}
+                    {order.type === 'Smart Trading' && (
                       <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                           <div>
                             <div className="text-gray-600">Transaction:</div>
-                            <div className="font-medium">{isTradingPlan ? order.assetSymbol : order.symbol || 'N/A'}</div>
+                            <div className="font-medium">{order.symbol || 'N/A'}</div>
                           </div>
                           <div>
                             <div className="text-gray-600">Cycle:</div>
@@ -393,55 +359,29 @@ const Account = () => {
                           </div>
                           <div>
                             <div className="text-gray-600">Daily Ror:</div>
-                            <div className="font-medium">
-                              {isTradingPlan ? 
-                                (order.yieldRange ? `${order.yieldRange[0]}%-${order.yieldRange[1]}%` : '1.5%-3.0%') : 
-                                (order.dailyRor || '2.5%-3.0%')
-                              }
-                            </div>
+                            <div className="font-medium">{order.dailyRor || '2.5%-3.0%'}</div>
                           </div>
                           <div>
                             <div className="text-gray-600">Amount:</div>
-                            <div className="font-medium">
-                              {isTradingPlan ? 
-                                `${order.investmentAmount?.toFixed(2) || '0.00'} USD` : 
-                                `${order.amount?.toFixed(2) || '0.00'} USD`
-                              }
-                            </div>
+                            <div className="font-medium">{order.amount?.toFixed(2) || '0.00'} USD</div>
                           </div>
-                          {!isTradingPlan && (
-                            <>
-                              <div>
-                                <div className="text-gray-600">Today's Earnings:</div>
-                                <div className="font-medium text-green-600">{order.todayEarnings?.toFixed(2) || '0.00'} USDC</div>
-                              </div>
-                              <div>
-                                <div className="text-gray-600">Total Revenue:</div>
-                                <div className="font-medium text-green-600">{order.totalRevenue?.toFixed(2) || order.profit?.toFixed(2) || '0.00'} USDC</div>
-                              </div>
-                            </>
-                          )}
+                          <div>
+                            <div className="text-gray-600">Today's Earnings:</div>
+                            <div className="font-medium text-green-600">{order.todayEarnings?.toFixed(2) || '0.00'} USDC</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-600">Total Revenue:</div>
+                            <div className="font-medium text-green-600">{order.totalRevenue?.toFixed(2) || order.profit?.toFixed(2) || '0.00'} USDC</div>
+                          </div>
                         </div>
                         <div className="mt-3 sm:mt-4 text-xs sm:text-sm">
                           <div className="text-gray-600">Status: <span className="font-medium">{order.status || 'Active'}</span></div>
                         </div>
-                        {isTradingPlan && (
-                          <div className="mt-3 sm:mt-4 text-center">
-                            <div className="text-xs text-gray-500 mb-2">
-                              This plan will automatically complete and add profits to your balance
-                            </div>
-                            <button className="bg-blue-600 text-white px-4 sm:px-6 py-2 rounded-lg font-medium text-xs sm:text-sm hover:bg-blue-700 transition-colors">
-                              View Details
-                            </button>
-                          </div>
-                        )}
-                        {!isTradingPlan && (
-                          <div className="mt-3 sm:mt-4 text-center">
-                            <button className="bg-gray-800 text-white px-4 sm:px-6 py-2 rounded-lg font-medium text-xs sm:text-sm hover:bg-gray-700 transition-colors">
-                              Recreate Plan
-                            </button>
-                          </div>
-                        )}
+                        <div className="mt-3 sm:mt-4 text-center">
+                          <button className="bg-gray-800 text-white px-4 sm:px-6 py-2 rounded-lg font-medium text-xs sm:text-sm hover:bg-gray-700 transition-colors">
+                            Recreate Plan
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -453,24 +393,14 @@ const Account = () => {
                     </div>
                   </div>
                 </div>
-                );
-              })
+              ))
             ) : (
               <div className="bg-white border-2 border-gray-200 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center">
-                <div className="text-gray-500 text-base sm:text-lg">
-                  {activeOrderTab === 'Active Plans' ? 'No active trading plans found' : 'No orders found'}
-                </div>
-                {activeOrderTab === 'Active Plans' && (
-                  <div className="text-gray-400 text-sm mt-2">
-                    Create a new Smart Trading Plan to see it here
-                  </div>
-                )}
+                <div className="text-gray-500 text-base sm:text-lg">No orders found</div>
               </div>
             )}
           </div>
         </motion.div>
-
-        
 
         {/* Settings Section */}
         <motion.div
