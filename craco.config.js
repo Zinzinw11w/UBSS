@@ -18,7 +18,7 @@ module.exports = {
         fs: false,
         net: false,
         tls: false,
-        process: require.resolve('process/browser'),
+        process: require.resolve('process/browser.js'),
       };
       
       webpackConfig.plugins = [

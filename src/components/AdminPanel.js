@@ -67,6 +67,25 @@ const AdminPanel = () => {
     loadData();
   }, [activeTab, loadData]);
 
+  // Real-time subscription for trades
+  useEffect(() => {
+    if (activeTab === 'trades') {
+      console.log('=== ADMIN TRADES SUBSCRIPTION SETUP ===');
+      
+      // Subscribe to all trades for real-time updates
+      const unsubscribe = database.subscribeToUserTrades('all', 'all', (snapshot) => {
+        console.log('=== ADMIN TRADES UPDATE ===');
+        console.log('Trades snapshot docs count:', snapshot.docs.length);
+        
+        const tradesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log('Updated trades data:', tradesData);
+        setTrades(tradesData);
+      });
+
+      return () => unsubscribe();
+    }
+  }, [activeTab]);
+
   // Real-time subscription for conversations
   useEffect(() => {
     if (activeTab === 'chat') {
@@ -334,34 +353,126 @@ const AdminPanel = () => {
 
   const renderTrades = () => (
     <div className="space-y-4">
+      <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+        <h3 className="font-semibold text-blue-900 mb-2">📊 Trading Plans Overview</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600">{trades.length}</div>
+            <div className="text-blue-800">Total Plans</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600">
+              {trades.filter(t => t.status === 'Active').length}
+            </div>
+            <div className="text-green-800">Active</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600">
+              {trades.filter(t => t.isSmartTrade || t.type === 'Smart Trading').length}
+            </div>
+            <div className="text-purple-800">Smart Trading</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-orange-600">
+              ${trades.reduce((sum, t) => sum + (t.amount || t.orderAmount || 0), 0).toFixed(2)}
+            </div>
+            <div className="text-orange-800">Total Volume</div>
+          </div>
+        </div>
+      </div>
+
       {trades.map((trade) => (
-        <div key={trade.id} className="bg-white rounded-lg p-6 shadow-sm border">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="font-semibold text-gray-900">{trade.asset} - {trade.tradeType}</h3>
-              <p className="text-sm text-gray-500">Amount: {trade.amount}</p>
-              <p className="text-sm text-gray-500">Leverage: {trade.leverage}x</p>
-              <p className="text-sm text-gray-500">Entry Price: ${trade.entryPrice?.toFixed(2)}</p>
-              <p className="text-sm text-gray-500">Current Price: ${trade.currentPrice?.toFixed(2)}</p>
-              <p className="text-sm text-gray-500">Date: {formatDate(trade.createdAt)}</p>
+        <div key={trade.id} className="bg-white rounded-lg p-6 shadow-sm border hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex-1">
+              <div className="flex items-center space-x-2 mb-2">
+                <h3 className="font-semibold text-gray-900 text-lg">
+                  {trade.asset || trade.symbol || 'N/A'} - {trade.tradeType || trade.type || 'Trade'}
+                </h3>
+                {(trade.isSmartTrade || trade.type === 'Smart Trading') && (
+                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                    Smart Trading
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mb-1">
+                User: {formatAddress(trade.walletAddress || trade.userId)}
+              </p>
+              <p className="text-sm text-gray-500">
+                Created: {formatDate(trade.createdAt)}
+              </p>
             </div>
             <div className="text-right">
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                trade.status === 'open' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                trade.status === 'Active' ? 'bg-green-100 text-green-800' :
+                trade.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                trade.status === 'open' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-gray-100 text-gray-800'
               }`}>
-                {trade.status}
+                {trade.status || 'Unknown'}
               </span>
-              <p className={`text-lg font-bold mt-2 ${
-                trade.profit >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                ${trade.profit?.toFixed(2) || '0.00'}
-              </p>
-              {trade.isSmartTrade && (
-                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                  Smart Trade
-                </span>
-              )}
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div>
+              <div className="text-sm text-gray-600">Amount</div>
+              <div className="font-semibold text-lg">${(trade.amount || trade.orderAmount || 0).toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-600">Profit</div>
+              <div className={`font-semibold text-lg ${
+                (trade.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                ${(trade.profit || 0).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-600">Leverage</div>
+              <div className="font-semibold text-lg">{(trade.leverage || 1)}x</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-600">Entry Price</div>
+              <div className="font-semibold text-lg">${(trade.entryPrice || trade.openPrice || 0).toFixed(4)}</div>
+            </div>
+          </div>
+
+          {/* Smart Trading Specific Details */}
+          {(trade.isSmartTrade || trade.type === 'Smart Trading') && (
+            <div className="bg-purple-50 rounded-lg p-4 mb-4">
+              <h4 className="font-semibold text-purple-900 mb-2">Smart Trading Details</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                {trade.timeframe && (
+                  <div>
+                    <div className="text-purple-700">Timeframe</div>
+                    <div className="font-semibold text-purple-900">{trade.timeframe}</div>
+                  </div>
+                )}
+                {trade.dailyRor && (
+                  <div>
+                    <div className="text-purple-700">Daily ROR</div>
+                    <div className="font-semibold text-purple-900">{trade.dailyRor}</div>
+                  </div>
+                )}
+                {trade.todayEarnings && (
+                  <div>
+                    <div className="text-purple-700">Today's Earnings</div>
+                    <div className="font-semibold text-green-600">${trade.todayEarnings.toFixed(2)}</div>
+                  </div>
+                )}
+                {trade.totalRevenue && (
+                  <div>
+                    <div className="text-purple-700">Total Revenue</div>
+                    <div className="font-semibold text-green-600">${trade.totalRevenue.toFixed(2)}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Trade ID for debugging */}
+          <div className="text-xs text-gray-400 border-t pt-2">
+            Trade ID: {trade.id}
           </div>
         </div>
       ))}
@@ -519,8 +630,8 @@ const AdminPanel = () => {
         <p className="text-gray-600 mt-2 text-sm sm:text-base">Manage users, deposits, withdrawals, and trades</p>
       </div>
 
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm border mb-4 sm:mb-6">
+      {/* Tabs */}
+      <div className="bg-white rounded-lg shadow-sm border mb-4 sm:mb-6">
           <div className="flex flex-wrap sm:flex-nowrap space-x-2 sm:space-x-8 px-3 sm:px-6 overflow-x-auto">
             {tabs.map((tab) => (
               <button
@@ -559,6 +670,6 @@ const AdminPanel = () => {
         </div>
       </div>
     );
-};
+  };
 
 export default AdminPanel;

@@ -31,22 +31,70 @@ export default function MobileAccount() {
 
   // Filter trades based on active tab
   const getFilteredTrades = () => {
-    if (!userTrades || userTrades.length === 0) return [];
+    // Ensure userTrades is always an array
+    const trades = Array.isArray(userTrades) ? userTrades : [];
     
+    if (!userTrades || trades.length === 0) return [];
+    
+    console.log('🔍 Filtering trades:', {
+      activeTab: activeOrderTab,
+      totalTrades: trades.length,
+      userTrades: trades.map(t => ({
+        id: t.id,
+        walletAddress: t.walletAddress,
+        userId: t.userId,
+        type: t.type,
+        isSmartTrade: t.isSmartTrade,
+        status: t.status
+      }))
+    });
+    
+    let filtered = [];
     switch (activeOrderTab) {
       case 'Smart':
-        return userTrades.filter(trade => trade.isSmartTrade === true || trade.type === 'Smart Trading');
+        filtered = trades.filter(trade => 
+          trade.isSmartTrade === true || 
+          trade.type === 'Smart Trading' ||
+          trade.type === 'Smart'
+        );
+        break;
       case 'Options':
-        return userTrades.filter(trade => trade.type === 'Options');
+        filtered = trades.filter(trade => 
+          trade.type === 'Options' || 
+          trade.tradeType === 'Options' ||
+          trade.type === 'options'
+        );
+        break;
       case 'Static Inco':
-        return userTrades.filter(trade => trade.type === 'Static Income');
+        filtered = trades.filter(trade => 
+          trade.type === 'Static Income' || 
+          trade.type === 'Static' ||
+          trade.type === 'static'
+        );
+        break;
       case 'All orders':
       default:
-        return userTrades;
+        filtered = trades;
+        break;
     }
+    
+    console.log('✅ Filtered result:', {
+      activeTab: activeOrderTab,
+      filteredCount: filtered.length,
+      filteredTrades: Array.isArray(filtered) ? filtered.map(t => ({
+        id: t.id,
+        walletAddress: t.walletAddress,
+        userId: t.userId,
+        type: t.type,
+        isSmartTrade: t.isSmartTrade,
+        status: t.status
+      })) : []
+    });
+    
+    return filtered;
   };
 
-  const filteredTrades = getFilteredTrades();
+  const filteredTrades = userTrades ? getFilteredTrades() : [];
 
   // Handle trade selection
   const handleTradeClick = (trade) => {
@@ -286,7 +334,7 @@ export default function MobileAccount() {
             ) : (
               filteredTrades.map((trade, index) => (
                 <div 
-                  key={trade.id || index} 
+                  key={`trade-${trade.id || trade.walletAddress || 'unknown'}-${index}`} 
                   className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                   onClick={() => handleTradeClick(trade)}
                 >

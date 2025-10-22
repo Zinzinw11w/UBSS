@@ -274,7 +274,7 @@ export default function MobileMarket() {
     let stocksInterval = null;
     let etfInterval = null;
     let futuresInterval = null;
-    // Close existing WebSocket
+      // Close existing WebSocket
     if (webSocket) {
       webSocket.close();
     }

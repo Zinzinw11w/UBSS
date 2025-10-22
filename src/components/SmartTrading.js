@@ -8,6 +8,10 @@ import PriceChart from './PriceChart';
 import CreatePlanModal from './CreatePlanModal';
 import { 
   fetchCryptoPrices,
+  fetchStockPrices,
+  fetchETFPrices,
+  fetchFuturesPrices,
+  fetchRealTimeForexRates,
   formatPrice,
   formatPercentage,
   generateRealTimeChartData
@@ -31,84 +35,318 @@ const SmartTrading = () => {
     { key: 'Futures', label: t('futures') }
   ];
 
+  // Data fetching functions for each tab
+  const fetchForexData = async () => {
+    try {
+      const forexRates = await fetchRealTimeForexRates();
+      const mockData = [
+        {
+          id: 1,
+          pair: 'USD/CHF',
+          country: 'Switzerland',
+          value: formatPrice(forexRates.rates.CHF, 4),
+          change: formatPercentage(0.09),
+          isPositive: true,
+          flags: ['US', 'CH'],
+          flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/ch.png'],
+          chart: generateRealTimeChartData(forexRates.rates.CHF, true)
+        },
+        {
+          id: 2,
+          pair: 'USD/JPY',
+          country: 'Japan',
+          value: formatPrice(forexRates.rates.JPY, 4),
+          change: formatPercentage(0.09),
+          isPositive: true,
+          flags: ['US', 'JP'],
+          flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/jp.png'],
+          chart: generateRealTimeChartData(forexRates.rates.JPY, true)
+        },
+        {
+          id: 3,
+          pair: 'USD/EUR',
+          country: 'Eurozone',
+          value: formatPrice(forexRates.rates.EUR, 4),
+          change: formatPercentage(0.04),
+          isPositive: true,
+          flags: ['US', 'EU'],
+          flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/eu.png'],
+          chart: generateRealTimeChartData(forexRates.rates.EUR, true)
+        },
+        {
+          id: 4,
+          pair: 'USD/GBP',
+          country: 'United Kingdom',
+          value: formatPrice(forexRates.rates.GBP, 4),
+          change: formatPercentage(-0.02),
+          isPositive: false,
+          flags: ['US', 'GB'],
+          flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/gb.png'],
+          chart: generateRealTimeChartData(forexRates.rates.GBP, false)
+        },
+        {
+          id: 5,
+          pair: 'USD/CAD',
+          country: 'Canada',
+          value: formatPrice(forexRates.rates.CAD, 4),
+          change: formatPercentage(0.03),
+          isPositive: true,
+          flags: ['US', 'CA'],
+          flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/ca.png'],
+          chart: generateRealTimeChartData(forexRates.rates.CAD, true)
+        },
+        {
+          id: 6,
+          pair: 'USD/AUD',
+          country: 'Australia',
+          value: formatPrice(forexRates.rates.AUD, 4),
+          change: formatPercentage(-0.05),
+          isPositive: false,
+          flags: ['US', 'AU'],
+          flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/au.png'],
+          chart: generateRealTimeChartData(forexRates.rates.AUD, false)
+        }
+      ];
+      setMarketData(mockData);
+    } catch (error) {
+      console.error('Error fetching Forex data:', error);
+      setError('Failed to fetch Forex data');
+    }
+  };
+
+  const fetchStocksData = async () => {
+    try {
+      const stockData = await fetchStockPrices(['AAPL', 'TSLA', 'AMZN', 'GOOGL', 'MSFT']);
+      const mockData = [
+        {
+          id: 1,
+          pair: 'AAPL',
+          country: 'Apple Inc.',
+          value: formatPrice(stockData.AAPL?.price || 150, 2),
+          change: formatPercentage(stockData.AAPL?.changePercent || 0),
+          isPositive: (stockData.AAPL?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          logo: 'https://logo.clearbit.com/apple.com',
+          chart: generateRealTimeChartData(stockData.AAPL?.price || 150, (stockData.AAPL?.changePercent || 0) >= 0)
+        },
+        {
+          id: 2,
+          pair: 'TSLA',
+          country: 'Tesla Inc.',
+          value: formatPrice(stockData.TSLA?.price || 200, 2),
+          change: formatPercentage(stockData.TSLA?.changePercent || 0),
+          isPositive: (stockData.TSLA?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          logo: 'https://logo.clearbit.com/tesla.com',
+          chart: generateRealTimeChartData(stockData.TSLA?.price || 200, (stockData.TSLA?.changePercent || 0) >= 0)
+        },
+        {
+          id: 3,
+          pair: 'AMZN',
+          country: 'Amazon.com Inc.',
+          value: formatPrice(stockData.AMZN?.price || 3000, 2),
+          change: formatPercentage(stockData.AMZN?.changePercent || 0),
+          isPositive: (stockData.AMZN?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          logo: 'https://logo.clearbit.com/amazon.com',
+          chart: generateRealTimeChartData(stockData.AMZN?.price || 3000, (stockData.AMZN?.changePercent || 0) >= 0)
+        },
+        {
+          id: 4,
+          pair: 'GOOGL',
+          country: 'Alphabet Inc.',
+          value: formatPrice(stockData.GOOGL?.price || 2500, 2),
+          change: formatPercentage(stockData.GOOGL?.changePercent || 0),
+          isPositive: (stockData.GOOGL?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          logo: 'https://logos-world.net/wp-content/uploads/2020/09/Google-Logo.png',
+          chart: generateRealTimeChartData(stockData.GOOGL?.price || 2500, (stockData.GOOGL?.changePercent || 0) >= 0)
+        },
+        {
+          id: 5,
+          pair: 'MSFT',
+          country: 'Microsoft Corporation',
+          value: formatPrice(stockData.MSFT?.price || 350, 2),
+          change: formatPercentage(stockData.MSFT?.changePercent || 0),
+          isPositive: (stockData.MSFT?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          logo: 'https://logo.clearbit.com/microsoft.com',
+          chart: generateRealTimeChartData(stockData.MSFT?.price || 350, (stockData.MSFT?.changePercent || 0) >= 0)
+        }
+      ];
+      setMarketData(mockData);
+    } catch (error) {
+      console.error('Error fetching Stocks data:', error);
+      setError('Failed to fetch Stocks data');
+    }
+  };
+
+  const fetchETFsData = async () => {
+    try {
+      const etfData = await fetchETFPrices(['SPY', 'QQQ', 'IWM', 'VTI', 'VEA']);
+      const mockData = [
+        {
+          id: 1,
+          pair: 'SPY',
+          country: 'SPDR S&P 500 ETF',
+          value: formatPrice(etfData.SPY?.price || 400, 2),
+          change: formatPercentage(etfData.SPY?.changePercent || 0),
+          isPositive: (etfData.SPY?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(etfData.SPY?.price || 400, (etfData.SPY?.changePercent || 0) >= 0)
+        },
+        {
+          id: 2,
+          pair: 'QQQ',
+          country: 'Invesco QQQ Trust',
+          value: formatPrice(etfData.QQQ?.price || 350, 2),
+          change: formatPercentage(etfData.QQQ?.changePercent || 0),
+          isPositive: (etfData.QQQ?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(etfData.QQQ?.price || 350, (etfData.QQQ?.changePercent || 0) >= 0)
+        },
+        {
+          id: 3,
+          pair: 'IWM',
+          country: 'iShares Russell 2000 ETF',
+          value: formatPrice(etfData.IWM?.price || 200, 2),
+          change: formatPercentage(etfData.IWM?.changePercent || 0),
+          isPositive: (etfData.IWM?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(etfData.IWM?.price || 200, (etfData.IWM?.changePercent || 0) >= 0)
+        },
+        {
+          id: 4,
+          pair: 'VTI',
+          country: 'Vanguard Total Stock Market ETF',
+          value: formatPrice(etfData.VTI?.price || 220, 2),
+          change: formatPercentage(etfData.VTI?.changePercent || 0),
+          isPositive: (etfData.VTI?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(etfData.VTI?.price || 220, (etfData.VTI?.changePercent || 0) >= 0)
+        },
+        {
+          id: 5,
+          pair: 'VEA',
+          country: 'Vanguard FTSE Developed Markets ETF',
+          value: formatPrice(etfData.VEA?.price || 50, 2),
+          change: formatPercentage(etfData.VEA?.changePercent || 0),
+          isPositive: (etfData.VEA?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(etfData.VEA?.price || 50, (etfData.VEA?.changePercent || 0) >= 0)
+        }
+      ];
+      setMarketData(mockData);
+    } catch (error) {
+      console.error('Error fetching ETF data:', error);
+      setError('Failed to fetch ETF data');
+    }
+  };
+
+  const fetchFuturesData = async () => {
+    try {
+      const futuresData = await fetchFuturesPrices(['ES', 'NQ', 'YM', 'RTY', 'GC']);
+      const mockData = [
+        {
+          id: 1,
+          pair: 'ES',
+          country: 'E-mini S&P 500',
+          value: formatPrice(futuresData.ES?.price || 4500, 2),
+          change: formatPercentage(futuresData.ES?.changePercent || 0),
+          isPositive: (futuresData.ES?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(futuresData.ES?.price || 4500, (futuresData.ES?.changePercent || 0) >= 0)
+        },
+        {
+          id: 2,
+          pair: 'NQ',
+          country: 'E-mini NASDAQ-100',
+          value: formatPrice(futuresData.NQ?.price || 15000, 2),
+          change: formatPercentage(futuresData.NQ?.changePercent || 0),
+          isPositive: (futuresData.NQ?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(futuresData.NQ?.price || 15000, (futuresData.NQ?.changePercent || 0) >= 0)
+        },
+        {
+          id: 3,
+          pair: 'YM',
+          country: 'E-mini Dow Jones',
+          value: formatPrice(futuresData.YM?.price || 35000, 2),
+          change: formatPercentage(futuresData.YM?.changePercent || 0),
+          isPositive: (futuresData.YM?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(futuresData.YM?.price || 35000, (futuresData.YM?.changePercent || 0) >= 0)
+        },
+        {
+          id: 4,
+          pair: 'RTY',
+          country: 'E-mini Russell 2000',
+          value: formatPrice(futuresData.RTY?.price || 2000, 2),
+          change: formatPercentage(futuresData.RTY?.changePercent || 0),
+          isPositive: (futuresData.RTY?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(futuresData.RTY?.price || 2000, (futuresData.RTY?.changePercent || 0) >= 0)
+        },
+        {
+          id: 5,
+          pair: 'GC',
+          country: 'Gold Futures',
+          value: formatPrice(futuresData.GC?.price || 2000, 2),
+          change: formatPercentage(futuresData.GC?.changePercent || 0),
+          isPositive: (futuresData.GC?.changePercent || 0) >= 0,
+          flags: ['US', 'US'],
+          chart: generateRealTimeChartData(futuresData.GC?.price || 2000, (futuresData.GC?.changePercent || 0) >= 0)
+        }
+      ];
+      setMarketData(mockData);
+    } catch (error) {
+      console.error('Error fetching Futures data:', error);
+      setError('Failed to fetch Futures data');
+    }
+  };
+
   // Fetch real-time market data
   useEffect(() => {
+    let forexInterval = null;
+    let stocksInterval = null;
+    let etfInterval = null;
+    let futuresInterval = null;
+    
     const fetchMarketData = async () => {
       try {
         setLoading(true);
         setError(null);
 
         if (activeTab === 'Forex') {
-          const mockData = [
-            {
-              id: 1,
-              pair: 'USD/CHF',
-              country: 'Switzerland',
-              value: formatPrice(0.7963, 4),
-              change: formatPercentage(0.09),
-              isPositive: true,
-              flags: ['US', 'CH'],
-              flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/ch.png'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 2,
-              pair: 'USD/JPY',
-              country: 'Japan',
-              value: formatPrice(149.19, 4),
-              change: formatPercentage(0.09),
-              isPositive: true,
-              flags: ['US', 'JP'],
-              flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/jp.png'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 3,
-              pair: 'USD/EUR',
-              country: 'Eurozone',
-              value: formatPrice(0.85, 4),
-              change: formatPercentage(0.04),
-              isPositive: true,
-              flags: ['US', 'EU'],
-              flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/eu.png'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 4,
-              pair: 'USD/GBP',
-              country: 'United Kingdom',
-              value: formatPrice(0.73, 4),
-              change: formatPercentage(-0.02),
-              isPositive: false,
-              flags: ['US', 'GB'],
-              flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/gb.png'],
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 5,
-              pair: 'USD/CAD',
-              country: 'Canada',
-              value: formatPrice(1.25, 4),
-              change: formatPercentage(0.03),
-              isPositive: true,
-              flags: ['US', 'CA'],
-              flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/ca.png'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 6,
-              pair: 'USD/AUD',
-              country: 'Australia',
-              value: formatPrice(1.35, 4),
-              change: formatPercentage(-0.05),
-              isPositive: false,
-              flags: ['US', 'AU'],
-              flagUrls: ['https://flagcdn.com/w20/us.png', 'https://flagcdn.com/w20/au.png'],
-              chart: generateRealTimeChartData(false)
-            }
-          ];
-          setMarketData(mockData);
+          console.log('🔄 [SmartTrading] Initializing Forex tab with dedicated data feed');
+          await fetchForexData();
+          forexInterval = setInterval(async () => {
+            await fetchForexData();
+          }, 5000);
+          
+        } else if (activeTab === 'Stocks') {
+          console.log('🔄 [SmartTrading] Initializing Stocks tab with dedicated data feed');
+          await fetchStocksData();
+          stocksInterval = setInterval(async () => {
+            await fetchStocksData();
+          }, 5000);
+          
+        } else if (activeTab === 'ETF') {
+          console.log('🔄 [SmartTrading] Initializing ETF tab with dedicated data feed');
+          await fetchETFsData();
+          etfInterval = setInterval(async () => {
+            await fetchETFsData();
+          }, 5000);
+          
+        } else if (activeTab === 'Futures') {
+          console.log('🔄 [SmartTrading] Initializing Futures tab with dedicated data feed');
+          await fetchFuturesData();
+          futuresInterval = setInterval(async () => {
+            await fetchFuturesData();
+          }, 5000);
+          
         } else if (activeTab === 'Crypto') {
+          console.log('🚀 [SmartTrading] Initializing Crypto tab with WebSocket-only data');
           const cryptoData = await fetchCryptoPrices(['bitcoin', 'ethereum', 'filecoin', 'dogecoin', 'ripple']);
           const mockData = [
             {
@@ -120,7 +358,7 @@ const SmartTrading = () => {
               isPositive: (cryptoData.bitcoin?.usd_24h_change || 0) >= 0,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png',
-              chart: generateRealTimeChartData((cryptoData.bitcoin?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(cryptoData.bitcoin?.usd || 50000, (cryptoData.bitcoin?.usd_24h_change || 0) >= 0)
             },
             {
               id: 2,
@@ -131,462 +369,78 @@ const SmartTrading = () => {
               isPositive: (cryptoData.ethereum?.usd_24h_change || 0) >= 0,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png',
-              chart: generateRealTimeChartData((cryptoData.ethereum?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(cryptoData.ethereum?.usd || 3000, (cryptoData.ethereum?.usd_24h_change || 0) >= 0)
             },
             {
               id: 3,
               pair: 'FIL/USD',
               country: 'Filecoin',
-              value: formatPrice(cryptoData.filecoin?.usd || 2.20, 4),
-              change: formatPercentage(cryptoData.filecoin?.usd_24h_change || 1.41),
+              value: formatPrice(cryptoData.filecoin?.usd || 0, 2),
+              change: formatPercentage(cryptoData.filecoin?.usd_24h_change || 0),
               isPositive: (cryptoData.filecoin?.usd_24h_change || 0) >= 0,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/12817/large/filecoin.png',
-              chart: generateRealTimeChartData((cryptoData.filecoin?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(cryptoData.filecoin?.usd || 5, (cryptoData.filecoin?.usd_24h_change || 0) >= 0)
             },
             {
               id: 4,
               pair: 'DOGE/USD',
               country: 'Dogecoin',
-              value: formatPrice(cryptoData.dogecoin?.usd || 0.24, 4),
-              change: formatPercentage(cryptoData.dogecoin?.usd_24h_change || 2.94),
+              value: formatPrice(cryptoData.dogecoin?.usd || 0, 6),
+              change: formatPercentage(cryptoData.dogecoin?.usd_24h_change || 0),
               isPositive: (cryptoData.dogecoin?.usd_24h_change || 0) >= 0,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/5/large/dogecoin.png',
-              chart: generateRealTimeChartData((cryptoData.dogecoin?.usd_24h_change || 0) >= 0)
+              chart: generateRealTimeChartData(cryptoData.dogecoin?.usd || 0.1, (cryptoData.dogecoin?.usd_24h_change || 0) >= 0)
             },
             {
               id: 5,
               pair: 'XRP/USD',
-              country: 'XRP',
-              value: formatPrice(cryptoData.ripple?.usd || 2.87, 4),
-              change: formatPercentage(cryptoData.ripple?.usd_24h_change || 2.13),
+              country: 'Ripple',
+              value: formatPrice(cryptoData.ripple?.usd || 0, 4),
+              change: formatPercentage(cryptoData.ripple?.usd_24h_change || 0),
               isPositive: (cryptoData.ripple?.usd_24h_change || 0) >= 0,
               flags: ['US', 'US'],
               logo: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
-              chart: generateRealTimeChartData((cryptoData.ripple?.usd_24h_change || 0) >= 0)
-            },
-            {
-              id: 6,
-              pair: 'LTC/USD',
-              country: 'Litecoin',
-              value: formatPrice(107.11, 2),
-              change: formatPercentage(2.44),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://assets.coingecko.com/coins/images/2/large/litecoin.png',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 7,
-              pair: 'DOT/USD',
-              country: 'Polkadot',
-              value: formatPrice(3.98, 4),
-              change: formatPercentage(3.00),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://assets.coingecko.com/coins/images/12171/large/polkadot.png',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 8,
-              pair: 'TRX/USD',
-              country: 'TRON',
-              value: formatPrice(0.08, 4),
-              change: formatPercentage(2.30),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 9,
-              pair: 'MATIC/USD',
-              country: 'Polygon',
-              value: formatPrice(0.89, 4),
-              change: formatPercentage(1.80),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 10,
-              pair: 'ADA/USD',
-              country: 'Cardano',
-              value: formatPrice(0.45, 4),
-              change: formatPercentage(0.90),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://assets.coingecko.com/coins/images/975/large/cardano.png',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 11,
-              pair: 'LINK/USD',
-              country: 'Chainlink',
-              value: formatPrice(14.67, 4),
-              change: formatPercentage(3.20),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 12,
-              pair: 'ATOM/USD',
-              country: 'Cosmos',
-              value: formatPrice(8.23, 4),
-              change: formatPercentage(-0.50),
-              isPositive: false,
-              flags: ['US', 'US'],
-              logo: 'https://assets.coingecko.com/coins/images/1481/large/cosmos_hub.png',
-              chart: generateRealTimeChartData(false)
+              chart: generateRealTimeChartData(cryptoData.ripple?.usd || 0.5, (cryptoData.ripple?.usd_24h_change || 0) >= 0)
             }
           ];
           setMarketData(mockData);
-        } else if (activeTab === 'Stocks') {
-          const mockData = [
-            {
-              id: 1,
-              pair: 'AAPL',
-              country: 'Apple Tokenize',
-              value: formatPrice(255.4603, 4),
-              change: formatPercentage(0.54),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/apple.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 2,
-              pair: 'TSLA',
-              country: 'Tesla Tokenize',
-              value: formatPrice(440.3997, 4),
-              change: formatPercentage(2.83),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/tesla.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 3,
-              pair: 'AMZN',
-              country: 'Amazon.com',
-              value: formatPrice(219.7825, 4),
-              change: formatPercentage(0.32),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/amazon.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 4,
-              pair: 'GOOGL',
-              country: 'Alphabet',
-              value: formatPrice(246.5391, 4),
-              change: formatPercentage(0.21),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logos-world.net/wp-content/uploads/2020/09/Google-Logo.png',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 5,
-              pair: 'MSFT',
-              country: 'Microsoft',
-              value: formatPrice(511.4605, 4),
-              change: formatPercentage(0.27),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/microsoft.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 6,
-              pair: 'UNH',
-              country: 'Unitedhealth Group Inc',
-              value: formatPrice(344.0802, 4),
-              change: formatPercentage(-1.11),
-              isPositive: false,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/unitedhealthgroup.com',
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 7,
-              pair: 'AI',
-              country: 'C3.ai, Inc',
-              value: formatPrice(17.1391, 4),
-              change: formatPercentage(-0.93),
-              isPositive: false,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/c3.ai',
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 8,
-              pair: 'BRZE',
-              country: 'Braze, Inc.',
-              value: formatPrice(31.5802, 4),
-              change: formatPercentage(0.22),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/braze.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 9,
-              pair: 'FLNC',
-              country: 'Fluence Energy, Inc.',
-              value: formatPrice(11.9107, 4),
-              change: formatPercentage(3.66),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/fluenceenergy.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 10,
-              pair: 'SNOW',
-              country: 'Snowflake Inc.',
-              value: formatPrice(224.6404, 4),
-              change: formatPercentage(1.05),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/snowflake.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 11,
-              pair: 'BB',
-              country: 'BlackBerry Limited',
-              value: formatPrice(4.9580, 4),
-              change: formatPercentage(6.17),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/blackberry.com',
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 12,
-              pair: 'EVGO',
-              country: 'EVgo, Inc.',
-              value: formatPrice(4.5691, 4),
-              change: formatPercentage(-1.32),
-              isPositive: false,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/evgo.com',
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 13,
-              pair: 'MQ',
-              country: 'Marqeta, Inc.',
-              value: formatPrice(5.3602, 4),
-              change: formatPercentage(0.38),
-              isPositive: true,
-              flags: ['US', 'US'],
-              logo: 'https://logo.clearbit.com/marqeta.com',
-              chart: generateRealTimeChartData(true)
-            }
-          ];
-          setMarketData(mockData);
-        } else if (activeTab === 'ETF') {
-          const mockData = [
-            {
-              id: 1,
-              pair: 'SPY',
-              country: 'SPDR S&P 500 ETF',
-              value: formatPrice(456.78, 2),
-              change: formatPercentage(0.85),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 2,
-              pair: 'QQQ',
-              country: 'Invesco QQQ Trust',
-              value: formatPrice(389.45, 2),
-              change: formatPercentage(1.23),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 3,
-              pair: 'GLD',
-              country: 'SPDR Gold Shares',
-              value: formatPrice(189.67, 2),
-              change: formatPercentage(1.45),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 4,
-              pair: 'VTI',
-              country: 'Vanguard Total Stock Market ETF',
-              value: formatPrice(234.56, 2),
-              change: formatPercentage(0.67),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 5,
-              pair: 'IWM',
-              country: 'iShares Russell 2000 ETF',
-              value: formatPrice(198.34, 2),
-              change: formatPercentage(-0.23),
-              isPositive: false,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 6,
-              pair: 'EFA',
-              country: 'iShares MSCI EAFE ETF',
-              value: formatPrice(78.91, 2),
-              change: formatPercentage(0.34),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 7,
-              pair: 'VEA',
-              country: 'Vanguard FTSE Developed Markets ETF',
-              value: formatPrice(45.23, 2),
-              change: formatPercentage(0.12),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 8,
-              pair: 'EEM',
-              country: 'iShares MSCI Emerging Markets ETF',
-              value: formatPrice(42.15, 2),
-              change: formatPercentage(-0.56),
-              isPositive: false,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 9,
-              pair: 'XLF',
-              country: 'Financial Select Sector SPDR Fund',
-              value: formatPrice(35.67, 2),
-              change: formatPercentage(0.78),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 10,
-              pair: 'XLK',
-              country: 'Technology Select Sector SPDR Fund',
-              value: formatPrice(178.45, 2),
-              change: formatPercentage(1.23),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 11,
-              pair: 'XLE',
-              country: 'Energy Select Sector SPDR Fund',
-              value: formatPrice(89.12, 2),
-              change: formatPercentage(-0.45),
-              isPositive: false,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 12,
-              pair: 'XLV',
-              country: 'Health Care Select Sector SPDR Fund',
-              value: formatPrice(134.78, 2),
-              change: formatPercentage(0.67),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            }
-          ];
-          setMarketData(mockData);
-        } else if (activeTab === 'Futures') {
-          const mockData = [
-            {
-              id: 1,
-              pair: 'ES',
-              country: 'E-mini S&P 500',
-              value: formatPrice(4567.25, 2),
-              change: formatPercentage(0.92),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 2,
-              pair: 'GC',
-              country: 'Gold Futures',
-              value: formatPrice(2034.80, 2),
-              change: formatPercentage(1.23),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 3,
-              pair: 'CL',
-              country: 'Crude Oil Futures',
-              value: formatPrice(78.45, 2),
-              change: formatPercentage(-1.67),
-              isPositive: false,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(false)
-            },
-            {
-              id: 4,
-              pair: 'NQ',
-              country: 'E-mini NASDAQ 100',
-              value: formatPrice(15678.90, 2),
-              change: formatPercentage(0.45),
-              isPositive: true,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(true)
-            },
-            {
-              id: 5,
-              pair: 'YM',
-              country: 'E-mini Dow Jones',
-              value: formatPrice(34567.89, 2),
-              change: formatPercentage(-0.12),
-              isPositive: false,
-              flags: ['US', 'US'],
-              chart: generateRealTimeChartData(false)
-            }
-          ];
-          setMarketData(mockData);
+        } else {
+          setMarketData([]);
         }
 
         setLoading(false);
       } catch (err) {
         console.error('Error fetching market data:', err);
         setError('Failed to fetch market data. Using cached data.');
+        setMarketData([]);
+      } finally {
         setLoading(false);
       }
     };
 
     fetchMarketData();
     
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchMarketData, 30000);
-    
-    return () => clearInterval(interval);
-  }, [activeTab]);
+    return () => {
+      if (forexInterval) {
+        clearInterval(forexInterval);
+        console.log('🧹 [SmartTrading] Cleared Forex polling interval');
+      }
+      if (stocksInterval) {
+        clearInterval(stocksInterval);
+        console.log('🧹 [SmartTrading] Cleared Stocks polling interval');
+      }
+      if (etfInterval) {
+        clearInterval(etfInterval);
+        console.log('🧹 [SmartTrading] Cleared ETF polling interval');
+      }
+      if (futuresInterval) {
+        clearInterval(futuresInterval);
+        console.log('🧹 [SmartTrading] Cleared Futures polling interval');
+      }
+    };
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddToWatchlist = (pair) => {
     setSelectedSymbol(pair);

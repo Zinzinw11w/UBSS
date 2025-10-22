@@ -23,7 +23,7 @@ class BackgroundService {
       }, 5 * 60 * 1000) // 5 minutes
     );
 
-    // Update active trade profits every hour
+    // Update active trade profits every 30 seconds for testing (change to 1 hour in production)
     this.intervals.push(
       setInterval(async () => {
         try {
@@ -31,7 +31,7 @@ class BackgroundService {
         } catch (error) {
           console.error('Error in updateActiveTradeProfits interval:', error);
         }
-      }, 60 * 60 * 1000) // 1 hour
+      }, 30 * 1000) // 30 seconds for testing
     );
 
     // Run immediately on start
