@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
 const MobileTradingPlanDetail = ({ trade, onClose, onRecreate }) => {
 
@@ -43,12 +42,12 @@ const MobileTradingPlanDetail = ({ trade, onClose, onRecreate }) => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <Link to="/account" className="flex items-center">
+          <button onClick={onClose} className="flex items-center">
             <svg className="w-5 h-5 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             <span className="text-gray-900 font-medium">Trading Plan</span>
-          </Link>
+          </button>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700"

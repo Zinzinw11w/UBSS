@@ -210,21 +210,11 @@ export const DatabaseProvider = ({ children }) => {
       const newMessage = await chat.sendMessage(user.id, message, false);
       console.log('New message created:', newMessage);
       
-      setChatMessages(prev => {
-        const updated = [...prev, newMessage];
-        
-        // Sort messages by createdAt in ascending order (oldest first) for proper chat flow
-        const sortedMessages = updated.sort((a, b) => {
-          const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-          const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-          return timeA - timeB; // Ascending order (oldest first)
-        });
-        
-        console.log('Updated chat messages (sorted):', sortedMessages);
-        return sortedMessages;
-      });
-      
+      // Don't manually update chatMessages here - let the subscription handle it
+      // This prevents duplicate messages and ensures real-time updates work properly
+      console.log('Message sent successfully, waiting for subscription update...');
       console.log('Auto-reply will be sent automatically for user messages');
+      
       return newMessage;
     } catch (error) {
       console.error('Error sending message:', error);

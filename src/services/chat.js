@@ -21,11 +21,43 @@ const AUTO_REPLY_MESSAGES = [
   "Hello! We appreciate your message. Our team will get back to you soon."
 ];
 
+// Check if user already has an auto-reply in their conversation
+export const checkIfUserHasAutoReply = async (userId) => {
+  try {
+    console.log('Checking if user has auto-reply:', userId);
+    
+    const q = query(
+      collection(db, 'chatMessages'),
+      where('userId', '==', userId),
+      where('isAutoReply', '==', true)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const hasAutoReply = !querySnapshot.empty;
+    
+    console.log('User has auto-reply:', hasAutoReply);
+    return hasAutoReply;
+  } catch (error) {
+    console.error('Error checking auto-reply status:', error);
+    // If there's an error checking, assume no auto-reply to be safe
+    return false;
+  }
+};
+
 // Auto-reply function
 export const sendAutoReply = async (userId) => {
   try {
+    console.log('=== AUTO-REPLY DEBUG ===');
+    console.log('User ID for auto-reply:', userId);
+    
+    if (!userId) {
+      console.error('No userId provided for auto-reply');
+      return null;
+    }
+    
     // Get a random auto-reply message
     const randomMessage = AUTO_REPLY_MESSAGES[Math.floor(Math.random() * AUTO_REPLY_MESSAGES.length)];
+    console.log('Selected auto-reply message:', randomMessage);
     
     // Send the auto-reply as an admin message
     const autoReplyData = {
@@ -39,10 +71,14 @@ export const sendAutoReply = async (userId) => {
       isAutoReply: true // Mark as auto-reply for identification
     };
 
+    console.log('Auto-reply data:', autoReplyData);
     const docRef = await addDoc(collection(db, 'chatMessages'), autoReplyData);
+    console.log('Auto-reply document created with ID:', docRef.id);
+    
     return { id: docRef.id, ...autoReplyData };
   } catch (error) {
     console.error('Error sending auto-reply:', error);
+    console.error('Error details:', error.message);
     throw error;
   }
 };
@@ -63,15 +99,31 @@ export const sendMessage = async (userId, message, isAdmin = false, adminId = nu
     const docRef = await addDoc(collection(db, 'chatMessages'), messageData);
     const newMessage = { id: docRef.id, ...messageData };
     
-    // If this is a user message (not admin), send auto-reply
+    // If this is a user message (not admin), check if auto-reply is needed
     if (!isAdmin) {
       try {
-        // Add a small delay to make it feel more natural
-        setTimeout(async () => {
-          await sendAutoReply(userId);
-        }, 1000 + Math.random() * 2000); // Random delay between 1-3 seconds
+        // Check if user already has an auto-reply in their conversation
+        const hasAutoReply = await checkIfUserHasAutoReply(userId);
+        
+        if (!hasAutoReply) {
+          console.log('Sending auto-reply for user:', userId);
+          // Add a small delay to make it feel more natural (1-3 seconds)
+          const delay = 1000 + Math.random() * 2000;
+          console.log(`Auto-reply will be sent in ${delay}ms`);
+          
+          setTimeout(async () => {
+            try {
+              await sendAutoReply(userId);
+              console.log('Auto-reply sent successfully');
+            } catch (autoReplyError) {
+              console.error('Error sending auto-reply:', autoReplyError);
+            }
+          }, delay);
+        } else {
+          console.log('User already has auto-reply, skipping...');
+        }
       } catch (autoReplyError) {
-        console.error('Error sending auto-reply:', autoReplyError);
+        console.error('Error setting up auto-reply:', autoReplyError);
         // Don't throw error here, as the main message was sent successfully
       }
     }
