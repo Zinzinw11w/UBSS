@@ -25,10 +25,31 @@ const MobileTradingPlanDetail = ({ trade, onClose, onRecreate }) => {
         return 'bg-green-100 text-green-800';
       case 'completed':
         return 'bg-blue-100 text-blue-800';
+      case 'finished':
+        return 'bg-green-100 text-green-800';
+      case 'successful':
+        return 'bg-green-100 text-green-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusDisplay = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'Finished';
+      case 'finished':
+        return 'Finished';
+      case 'successful':
+        return 'Successful';
+      case 'active':
+        return 'Active';
+      case 'pending':
+        return 'Pending';
+      default:
+        return status || 'Active';
     }
   };
 
@@ -74,7 +95,7 @@ const MobileTradingPlanDetail = ({ trade, onClose, onRecreate }) => {
               </p>
             </div>
             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(trade.status)}`}>
-              {trade.status || 'Active'}
+              {getStatusDisplay(trade.status)}
             </span>
           </div>
 

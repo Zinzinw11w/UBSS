@@ -284,6 +284,17 @@ export const DatabaseProvider = ({ children }) => {
     };
   }, [user?.id, user?.walletAddress]); // Depend on both user.id and user.walletAddress
 
+  // Test function to manually complete trading plans
+  const testCompleteTradingPlans = async () => {
+    try {
+      console.log('🧪 Testing trading plan completion...');
+      await database.processCompletedTradingPlans();
+      console.log('✅ Trading plan completion test completed');
+    } catch (error) {
+      console.error('❌ Error testing trading plan completion:', error);
+    }
+  };
+
   const value = {
     user,
     userTrades,
@@ -297,6 +308,7 @@ export const DatabaseProvider = ({ children }) => {
     createSmartTrade,
     closeTrade,
     sendMessage,
+    testCompleteTradingPlans,
     sendAdminMessage,
     loadUserData,
     updateUserBalance: database.updateUserBalance

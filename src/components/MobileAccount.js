@@ -24,7 +24,7 @@ export default function MobileAccount() {
   const [showTradeDetail, setShowTradeDetail] = useState(false);
   
   const navigate = useNavigate();
-  const { createDeposit, createWithdrawal, user, userTrades } = useDatabase();
+  const { createDeposit, createWithdrawal, user, userTrades, testCompleteTradingPlans } = useDatabase();
   const { account } = useWallet();
 
   const orderTabs = ['All orders', 'Options', 'Smart', 'Static Inco'];
@@ -688,6 +688,27 @@ export default function MobileAccount() {
              onClose={handleCloseTradeDetail}
              onRecreate={handleRecreateTrade}
            />
+         </div>
+       )}
+
+       {/* Test Button for Trading Plan Completion (Remove in production) */}
+       {process.env.NODE_ENV === 'development' && (
+         <div className="fixed bottom-4 right-4 z-40">
+           <button
+             onClick={async () => {
+               try {
+                 console.log('🧪 Testing trading plan completion...');
+                 await testCompleteTradingPlans();
+                 alert('Trading plan completion test completed! Check console for details.');
+               } catch (error) {
+                 console.error('Test error:', error);
+                 alert('Test failed. Check console for details.');
+               }
+             }}
+             className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-purple-700 transition-colors"
+           >
+             Test Complete Plans
+           </button>
          </div>
        )}
      </div>

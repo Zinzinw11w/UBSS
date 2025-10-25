@@ -12,7 +12,18 @@ class BackgroundService {
     console.log('Starting background service...');
     this.isRunning = true;
 
-    // Process completed orders every 5 minutes
+    // Process completed trading plans every 5 minutes
+    this.intervals.push(
+      setInterval(async () => {
+        try {
+          await database.processCompletedTradingPlans();
+        } catch (error) {
+          console.error('Error in processCompletedTradingPlans interval:', error);
+        }
+      }, 5 * 60 * 1000) // 5 minutes
+    );
+
+    // Process completed orders every 5 minutes (legacy)
     this.intervals.push(
       setInterval(async () => {
         try {
@@ -35,6 +46,7 @@ class BackgroundService {
     );
 
     // Run immediately on start
+    database.processCompletedTradingPlans();
     database.processCompletedOrders();
     database.updateActiveTradeProfits();
   }
@@ -47,6 +59,10 @@ class BackgroundService {
   }
 
   // Manual trigger for testing
+  async processTradingPlansNow() {
+    await database.processCompletedTradingPlans();
+  }
+
   async processOrdersNow() {
     await database.processCompletedOrders();
   }

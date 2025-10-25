@@ -21,7 +21,6 @@ import Loan from './components/Loan';
 import SmartTrading from './components/SmartTrading';
 import SignMessageModal from './components/SignMessageModal';
 import AdminPanel from './components/AdminPanel';
-import AdminLogin from './components/AdminLogin';
 import CreateAdminUser from './components/CreateAdminUser';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 import AlertSystem from './components/AlertSystem';
@@ -54,7 +53,6 @@ function App() {
                 </>
               )
             } />
-            <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/create" element={<CreateAdminUser />} />
             <Route path="/admin" element={
               <ProtectedAdminRoute>

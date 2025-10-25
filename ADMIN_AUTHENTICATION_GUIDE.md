@@ -225,3 +225,4 @@ const newAdmin = await createAdminUser(
 The admin authentication system provides robust security with password authentication and TOTP 2FA. The implementation follows security best practices and provides a user-friendly experience for administrators while maintaining high security standards.
 
 For production deployment, consider the security enhancements mentioned above and implement proper monitoring and logging systems.
+

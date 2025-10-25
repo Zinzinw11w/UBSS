@@ -125,15 +125,31 @@ const CreatePlanModal = ({ isOpen, onClose, symbol, availableBalance = 0 }) => {
       return false;
     }
     
-    // Check minimum amount
-    if (numericAmount < 1000) {
-      setError('Minimum amount is 1000 USD');
+    // Check amount limits based on timeframe
+    const days = parseInt(timeframe.split(' ')[0]) || 1;
+    let minAmount, maxAmount;
+    
+    if (days === 1) {
+      minAmount = 1000; maxAmount = 9999; // 1 day: 1000-9999 USD
+    } else if (days === 7) {
+      minAmount = 10000; maxAmount = 49999; // 7 days: 10000-49999 USD
+    } else if (days === 15) {
+      minAmount = 50000; maxAmount = 199999; // 15 days: 50000-199999 USD
+    } else if (days === 30) {
+      minAmount = 100000; maxAmount = 499999; // 30 days: 100000-499999 USD
+    } else if (days === 60) {
+      minAmount = 500000; maxAmount = 999999; // 60 days: 500000-999999 USD
+    } else {
+      minAmount = 1000; maxAmount = 199999; // Default fallback
+    }
+    
+    if (numericAmount < minAmount) {
+      setError(`Minimum amount is ${minAmount.toLocaleString()} USD for ${timeframe} plans`);
       return false;
     }
     
-    // Check maximum amount
-    if (numericAmount > 199999) {
-      setError('Maximum amount is 199999 USD');
+    if (numericAmount > maxAmount) {
+      setError(`Maximum amount is ${maxAmount.toLocaleString()} USD for ${timeframe} plans`);
       return false;
     }
     

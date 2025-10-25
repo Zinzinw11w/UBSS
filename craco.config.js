@@ -5,31 +5,27 @@ module.exports = {
     configure: (webpackConfig) => {
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,
-        crypto: require.resolve('crypto-browserify'),
-        stream: require.resolve('stream-browserify'),
-        buffer: require.resolve('buffer'),
-        util: require.resolve('util'),
-        url: require.resolve('url'),
-        assert: require.resolve('assert'),
-        os: require.resolve('os-browserify/browser'),
-        https: require.resolve('https-browserify'),
-        http: require.resolve('stream-http'),
-        vm: require.resolve('vm-browserify'),
-        fs: false,
-        net: false,
-        tls: false,
-        process: require.resolve('process/browser.js'),
+        "crypto": require.resolve("crypto-browserify"),
+        "stream": require.resolve("stream-browserify"),
+        "buffer": require.resolve("buffer"),
+        "process": require.resolve("process/browser.js"),
+        "vm": require.resolve("vm-browserify"),
+        "util": false,
+        "url": false,
+        "fs": false,
+        "path": false,
+        "os": false
       };
       
+      // Add process polyfill to plugins
       webpackConfig.plugins = [
         ...webpackConfig.plugins,
         new webpack.ProvidePlugin({
-          Buffer: ['buffer', 'Buffer'],
           process: 'process/browser.js',
         }),
       ];
       
       return webpackConfig;
-    },
-  },
+    }
+  }
 };

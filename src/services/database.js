@@ -683,7 +683,133 @@ export const updateActiveTradeProfits = async () => {
   }
 };
 
-// Auto-complete orders based on timeframe
+// Auto-complete trading plans based on timeframe
+export const processCompletedTradingPlans = async () => {
+  try {
+    console.log('🔄 Processing completed trading plans...');
+    
+    // Get all active trading plans
+    const activePlansQuery = query(
+      collection(db, 'trades'),
+      where('status', '==', 'Active'),
+      where('type', '==', 'Smart Trading')
+    );
+    
+    const activePlansSnapshot = await getDocs(activePlansQuery);
+    const now = new Date();
+    let completedCount = 0;
+    
+    for (const planDoc of activePlansSnapshot.docs) {
+      const planData = planDoc.data();
+      const createdAt = planData.createdAt?.toDate ? planData.createdAt.toDate() : new Date(planData.createdAt || 0);
+      
+      // Calculate expected completion time based on timeframe
+      let expectedCompletionTime;
+      const timeframe = planData.timeframe || '1 Day';
+      const days = parseInt(timeframe.split(' ')[0]) || 1;
+      
+      expectedCompletionTime = new Date(createdAt.getTime() + (days * 24 * 60 * 60 * 1000));
+      
+      // Check if plan should be completed
+      if (now >= expectedCompletionTime) {
+        console.log(`📅 Plan ${planDoc.id} has completed (${timeframe} elapsed)`);
+        
+        try {
+          // Calculate final profit based on timeframe and amount
+          const baseAmount = planData.amount || planData.orderAmount || 0;
+          let totalProfitRate;
+          
+          if (days === 1) {
+            // 1 day: 1.5% to 3.0% profit
+            if (baseAmount >= 1000 && baseAmount <= 9999) {
+              totalProfitRate = Math.random() * 0.015 + 0.015; // 1.5% to 3.0%
+            } else {
+              totalProfitRate = Math.random() * 0.02 + 0.01; // 1.0% to 3.0% for other amounts
+            }
+          } else if (days === 7) {
+            // 7 Days: 1.8% to 4.8% profit
+            if (baseAmount >= 10000 && baseAmount <= 49999) {
+              totalProfitRate = Math.random() * 0.03 + 0.018; // 1.8% to 4.8%
+            } else {
+              totalProfitRate = Math.random() * 0.02 + 0.015; // 1.5% to 3.5% for other amounts
+            }
+          } else if (days === 15) {
+            // 15 days: 2.10% to 2.5% profit
+            if (baseAmount >= 50000 && baseAmount <= 199999) {
+              totalProfitRate = Math.random() * 0.004 + 0.021; // 2.10% to 2.5%
+            } else {
+              totalProfitRate = Math.random() * 0.015 + 0.018; // 1.8% to 3.3% for other amounts
+            }
+          } else if (days === 30) {
+            // 30 days: 2.5% to 2.8% profit
+            if (baseAmount >= 100000 && baseAmount <= 499999) {
+              totalProfitRate = Math.random() * 0.003 + 0.025; // 2.5% to 2.8%
+            } else {
+              totalProfitRate = Math.random() * 0.02 + 0.02; // 2.0% to 4.0% for other amounts
+            }
+          } else if (days === 60) {
+            // 60 days: 2.8% to 3% profit
+            if (baseAmount >= 500000 && baseAmount <= 999999) {
+              totalProfitRate = Math.random() * 0.002 + 0.028; // 2.8% to 3.0%
+            } else {
+              totalProfitRate = Math.random() * 0.025 + 0.025; // 2.5% to 5.0% for other amounts
+            }
+          } else {
+            totalProfitRate = Math.random() * 0.01 + 0.01; // 1.0% to 2.0% for other timeframes
+          }
+          
+          const finalProfit = baseAmount * totalProfitRate;
+          const totalReturn = baseAmount + finalProfit;
+          
+          console.log(`💰 Plan ${planDoc.id} profit calculation:`, {
+            amount: baseAmount,
+            timeframe: timeframe,
+            profitRate: (totalProfitRate * 100).toFixed(2) + '%',
+            finalProfit: finalProfit.toFixed(2),
+            totalReturn: totalReturn.toFixed(2)
+          });
+          
+          // Update plan status to completed
+          await updateDoc(doc(db, 'trades', planDoc.id), {
+            status: 'completed',
+            profit: finalProfit,
+            totalReturn: totalReturn,
+            completedAt: serverTimestamp(),
+            profitRate: totalProfitRate,
+            finalYield: totalProfitRate * 100,
+            completionReason: 'Timeframe completed'
+          });
+          
+          // Add final profit to user balance
+          if (planData.walletAddress) {
+            await updateUserBalance(planData.walletAddress, finalProfit, 'profit');
+            console.log(`✅ Added final profit $${finalProfit.toFixed(2)} to user balance via wallet: ${planData.walletAddress}`);
+          } else if (planData.userId) {
+            await updateUserBalance(planData.userId, finalProfit, 'profit');
+            console.log(`✅ Added final profit $${finalProfit.toFixed(2)} to user balance via user ID: ${planData.userId}`);
+          }
+          
+          completedCount++;
+          console.log(`🎉 Plan ${planDoc.id} completed successfully!`);
+          
+        } catch (error) {
+          console.error(`❌ Error completing plan ${planDoc.id}:`, error);
+        }
+      }
+    }
+    
+    if (completedCount > 0) {
+      console.log(`✅ Successfully completed ${completedCount} trading plans`);
+    } else {
+      console.log('ℹ️ No trading plans ready for completion');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error processing completed trading plans:', error);
+  }
+};
+
+// Auto-complete orders based on timeframe (legacy function)
 export const processCompletedOrders = async () => {
   try {
     console.log('Processing completed orders...');
@@ -708,7 +834,6 @@ export const processCompletedOrders = async () => {
       
       expectedCompletionTime = new Date(createdAt.getTime() + (days * 24 * 60 * 60 * 1000));
       
-      // Check if order should be completed
       if (now >= expectedCompletionTime) {
         console.log(`Completing order ${orderDoc.id} - timeframe expired`);
         
